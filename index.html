@@ -1,0 +1,2854 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#1e40af">
+    <meta name="description" content="Sistema de gestión de pedidos y cobros para restaurante">
+    <title>POS Restaurante</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        
+        :root {
+            --sat: env(safe-area-inset-top, 0px);
+            --sab: env(safe-area-inset-bottom, 0px);
+            --sal: env(safe-area-inset-left, 0px);
+            --sar: env(safe-area-inset-right, 0px);
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f3f4f6; 
+            overscroll-behavior-y: none;
+            padding-top: var(--sat);
+            padding-left: var(--sal);
+            padding-right: var(--sar);
+        }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        * { -webkit-tap-highlight-color: transparent; }
+
+        .modal-enter { animation: modalFadeIn 0.2s ease-out; }
+        @keyframes modalFadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        
+        .toast-enter { animation: toastFadeIn 0.3s ease-out; }
+        @keyframes toastFadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        .history-folder-content { transition: max-height 0.3s ease-in-out, opacity 0.3s; max-height: 5000px; opacity: 1; overflow: hidden; }
+        .history-folder-content.collapsed { max-height: 0; opacity: 0; pointer-events: none; }
+        
+        .kitchen-badge { font-size: 0.85rem; font-weight: 900; padding: 0.3rem 0.6rem; border-radius: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .pb-safe { padding-bottom: calc(var(--sab) + 0.5rem); }
+
+        /* Posicionamiento para barra inferior fija en móvil */
+        @media (max-width: 767px) {
+            .mobile-bottom-nav {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                width: 100%;
+                z-index: 50;
+                background-color: #ffffff;
+                box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .desktop-card-hover {
+                transition: transform 0.15s ease, box-shadow 0.15s ease;
+            }
+            .desktop-card-hover:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            }
+        }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex flex-col md:flex-row overflow-hidden max-w-[1920px] mx-auto bg-gray-50 shadow-2xl">
+
+    <!-- BARRA DE NAVEGACIÓN LATERAL EN COMPUTADORAS (MD+) Y BARRA INFERIOR FIJA EN MÓVILES -->
+    <nav class="order-2 md:order-1 mobile-bottom-nav md:relative border-t md:border-t-0 md:border-r border-gray-200 flex md:flex-col justify-around md:justify-start items-center h-16 md:h-full md:w-20 lg:w-64 shrink-0 pb-safe md:pb-0 px-1 md:px-3 md:py-6">
+        
+        <!-- Logo/Título para PC -->
+        <div class="hidden md:flex items-center gap-3 px-3 mb-8 w-full">
+            <div class="w-10 h-10 bg-blue-800 text-yellow-400 rounded-2xl flex items-center justify-center shrink-0 shadow-md">
+                <i class="fa-solid fa-utensils text-xl"></i>
+            </div>
+            <div class="hidden lg:block truncate">
+                <h2 class="font-black text-sm text-gray-900 truncate" id="nav-brand-title">Mi Restaurante</h2>
+                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Sistema POS</span>
+            </div>
+        </div>
+
+        <div class="flex md:flex-col w-full justify-around md:justify-start gap-1 md:gap-2">
+            <button onclick="app.switchView('view-mesas')" class="nav-btn flex md:flex-row flex-col items-center justify-center md:justify-start gap-1 md:gap-3 w-full h-12 md:px-4 md:py-3 rounded-xl text-blue-600 hover:text-blue-800 md:hover:bg-blue-50 active:scale-95 transition-all" data-target="view-mesas">
+                <i class="fa-solid fa-border-all text-lg shrink-0"></i>
+                <span class="text-[9px] md:text-xs font-extrabold uppercase md:normal-case md:font-bold">Mesas</span>
+            </button>
+            <button onclick="app.switchView('view-menu')" class="nav-btn flex md:flex-row flex-col items-center justify-center md:justify-start gap-1 md:gap-3 w-full h-12 md:px-4 md:py-3 rounded-xl text-gray-400 hover:text-blue-600 md:hover:bg-blue-50 active:scale-95 transition-all" data-target="view-menu">
+                <i class="fa-solid fa-utensils text-lg shrink-0"></i>
+                <span class="text-[9px] md:text-xs font-extrabold uppercase md:normal-case md:font-bold">Menú</span>
+            </button>
+            <button onclick="app.switchView('view-cocina')" class="nav-btn flex md:flex-row flex-col items-center justify-center md:justify-start gap-1 md:gap-3 w-full h-12 md:px-4 md:py-3 rounded-xl text-gray-400 hover:text-blue-600 md:hover:bg-blue-50 active:scale-95 transition-all" data-target="view-cocina">
+                <i class="fa-solid fa-fire text-lg shrink-0"></i>
+                <span class="text-[9px] md:text-xs font-extrabold uppercase md:normal-case md:font-bold">Cocina</span>
+            </button>
+            <button onclick="app.switchView('view-historial')" class="nav-btn flex md:flex-row flex-col items-center justify-center md:justify-start gap-1 md:gap-3 w-full h-12 md:px-4 md:py-3 rounded-xl text-gray-400 hover:text-blue-600 md:hover:bg-blue-50 active:scale-95 transition-all" data-target="view-historial">
+                <i class="fa-solid fa-receipt text-lg shrink-0"></i>
+                <span class="text-[9px] md:text-xs font-extrabold uppercase md:normal-case md:font-bold">Historial</span>
+            </button>
+            <button onclick="app.switchView('view-cierre')" class="nav-btn flex md:flex-row flex-col items-center justify-center md:justify-start gap-1 md:gap-3 w-full h-12 md:px-4 md:py-3 rounded-xl text-gray-400 hover:text-blue-600 md:hover:bg-blue-50 active:scale-95 transition-all" data-target="view-cierre">
+                <i class="fa-solid fa-chart-pie text-lg shrink-0"></i>
+                <span class="text-[9px] md:text-xs font-extrabold uppercase md:normal-case md:font-bold">Cierre</span>
+            </button>
+            <button onclick="app.switchView('view-config')" class="nav-btn flex md:flex-row flex-col items-center justify-center md:justify-start gap-1 md:gap-3 w-full h-12 md:px-4 md:py-3 rounded-xl text-gray-400 hover:text-blue-600 md:hover:bg-blue-50 active:scale-95 transition-all" data-target="view-config">
+                <i class="fa-solid fa-gear text-lg shrink-0"></i>
+                <span class="text-[9px] md:text-xs font-extrabold uppercase md:normal-case md:font-bold">Ajustes</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ÁREA PRINCIPAL -->
+    <div class="order-1 md:order-2 flex-1 flex flex-col h-full overflow-hidden pb-16 md:pb-0">
+        
+        <!-- Header Principal -->
+        <header class="bg-blue-800 text-white p-3 md:p-4 shadow-md flex justify-between items-center z-30 shrink-0">
+            <div class="flex items-center gap-2 overflow-hidden">
+                <i class="fa-solid fa-utensils text-xl text-yellow-400 md:hidden"></i>
+                <h1 class="text-base md:text-xl font-extrabold truncate" id="header-title">Mesas</h1>
+            </div>
+            <button onclick="app.openNewOrderModal()" class="bg-yellow-400 hover:bg-yellow-500 text-blue-950 px-3.5 py-2 md:px-5 md:py-2.5 rounded-xl font-black text-xs md:text-sm shadow flex items-center gap-2 active:scale-95 transition-transform shrink-0">
+                <i class="fa-solid fa-circle-plus text-base"></i> <span>+ Nuevo Pedido</span>
+            </button>
+        </header>
+
+        <!-- Contenido Principal -->
+        <main class="flex-1 overflow-y-auto no-scrollbar relative" id="main-content">
+            
+            <!-- PANTALLA PRINCIPAL: MESAS Y PEDIDOS ACTIVOS -->
+            <div id="view-mesas" class="p-3 sm:p-5 md:p-6 hidden space-y-5 max-w-7xl mx-auto pb-24 md:pb-6">
+                <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1 text-xs md:text-sm font-bold">
+                    <button onclick="app.setMainFilter('all')" class="main-filter-btn active bg-blue-800 text-white px-4 py-2.5 rounded-xl shadow-sm whitespace-nowrap" data-filter="all">
+                        Todos los pedidos
+                    </button>
+                    <button onclick="app.setMainFilter('tables')" class="main-filter-btn bg-white text-gray-700 border px-4 py-2.5 rounded-xl whitespace-nowrap hover:bg-gray-100" data-filter="tables">
+                        🪑 Solo Mesas
+                    </button>
+                    <button onclick="app.setMainFilter('takeout')" class="main-filter-btn bg-white text-gray-700 border px-4 py-2.5 rounded-xl whitespace-nowrap hover:bg-gray-100" data-filter="takeout">
+                        🛍️ Para Llevar
+                    </button>
+                    <button onclick="app.setMainFilter('pending')" class="main-filter-btn bg-white text-gray-700 border px-4 py-2.5 rounded-xl whitespace-nowrap hover:bg-gray-100" data-filter="pending">
+                        ⏳ Pendientes
+                    </button>
+                </div>
+
+                <!-- Sección de Pedidos sin mesa -->
+                <div id="section-offtable-orders" class="hidden">
+                    <h2 class="text-xs md:text-sm font-extrabold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                        <i class="fa-solid fa-bag-shopping text-blue-600"></i> Pedidos sin mesa asignada
+                        <button onclick="app.clearOfftableOrders()" class="ml-auto bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1.5 rounded-lg text-[10px] font-black"><i class="fa-solid fa-trash mr-1"></i> Limpiar</button>
+                    </h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5" id="container-offtable-orders"></div>
+                </div>
+
+                <!-- Grilla de Mesas -->
+                <div id="section-tables">
+                    <h2 class="text-xs md:text-sm font-extrabold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                        <i class="fa-solid fa-border-all text-blue-600"></i> Estado de Mesas
+                    </h2>
+                    <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 md:gap-4" id="container-tables"></div>
+                </div>
+            </div>
+
+            <!-- DETALLE DE CUENTA / PEDIDO ABIERTO -->
+            <div id="view-table-detail" class="hidden flex flex-col h-full bg-gray-50 max-w-5xl mx-auto pb-20 md:pb-6">
+                <div class="bg-white p-3 sm:p-4 md:p-5 shadow-sm mb-2 shrink-0 border-b">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="flex items-center gap-2">
+                            <button onclick="app.openChangeDestinationModal()" class="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 px-3.5 py-2 rounded-xl font-black text-sm md:text-base active:scale-95 transition-transform">
+                                <span id="td-title">Mesa --</span>
+                                <i class="fa-solid fa-arrows-rotate text-xs text-blue-600"></i>
+                            </button>
+                            <span id="td-dest-badge" class="px-2.5 py-1 rounded-md text-[11px] md:text-xs font-extrabold uppercase bg-gray-100 text-gray-700">--</span>
+                        </div>
+                        <button onclick="app.switchView('view-mesas')" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl text-gray-700 font-bold text-xs md:text-sm active:scale-95">
+                            <i class="fa-solid fa-arrow-left mr-1"></i> Volver
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between bg-gray-100 p-2 rounded-xl text-xs md:text-sm overflow-x-auto no-scrollbar">
+                        <span class="font-bold text-gray-500 ml-1 whitespace-nowrap shrink-0">Cocina:</span>
+                        <div class="flex gap-1.5">
+                            <button onclick="app.setOrderPrepStatus('pending')" id="prep-btn-pending" class="px-3 py-1.5 rounded-lg font-bold text-gray-600 whitespace-nowrap">⏳ Pendiente</button>
+                            <button onclick="app.setOrderPrepStatus('preparing')" id="prep-btn-preparing" class="px-3 py-1.5 rounded-lg font-bold text-gray-600 whitespace-nowrap">🍳 En prep.</button>
+                            <button onclick="app.setOrderPrepStatus('ready')" id="prep-btn-ready" class="px-3 py-1.5 rounded-lg font-bold text-gray-600 whitespace-nowrap">✅ Listo</button>
+                            <button onclick="app.setOrderPrepStatus('delivered')" id="prep-btn-delivered" class="px-3 py-1.5 rounded-lg font-bold text-gray-600 whitespace-nowrap">🍽️ Entregado</button>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        <input type="text" id="td-general-note" placeholder="Nota general para este pedido..." class="w-full border-2 rounded-xl p-2 bg-gray-50 text-sm font-semibold focus:border-blue-500 outline-none" onchange="app.updateGeneralNote(this.value)">
+                    </div>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto p-3 sm:p-4 md:p-5 space-y-3" id="td-items-list"></div>
+
+                <div class="bg-white p-3.5 sm:p-5 shadow-[0_-4px_10px_rgba(0,0,0,0.08)] shrink-0 rounded-t-2xl md:rounded-2xl border-t md:border border-gray-100 md:m-4">
+                    <div class="flex justify-between mb-1 text-xs md:text-sm text-gray-500 font-medium">
+                        <span>Total de la Cuenta:</span> <span class="font-bold text-gray-800 text-sm md:text-base" id="td-total">Bs 0.00</span>
+                    </div>
+                    <div class="flex justify-between mb-1 text-xs md:text-sm text-green-600 font-medium">
+                        <span>Abonado / Pagado:</span> <span class="font-bold text-sm md:text-base" id="td-paid">Bs 0.00</span>
+                    </div>
+                    <div class="flex justify-between mb-3 text-red-600 text-base md:text-lg font-black border-t pt-2">
+                        <span>Saldo Pendiente:</span> <span id="td-balance">Bs 0.00</span>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <button onclick="app.openQuickAddModal()" class="bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-extrabold text-xs md:text-sm shadow active:scale-95 flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-plus-circle text-base md:text-lg"></i> + Pedido
+                        </button>
+                        <button onclick="app.generateTicket()" class="bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-extrabold text-xs md:text-sm shadow active:scale-95 flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-ticket text-base md:text-lg"></i> Ticket
+                        </button>
+                        <button onclick="app.openPaymentModal()" class="bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-extrabold text-xs md:text-sm shadow active:scale-95 flex items-center justify-center gap-1.5" id="btn-register-payment">
+                            <i class="fa-solid fa-money-bill-wave text-base md:text-lg"></i> Registrar Pago
+                        </button>
+                        <button onclick="app.closeTableAction()" class="bg-gray-800 hover:bg-gray-900 text-white py-3 rounded-xl font-extrabold text-xs md:text-sm shadow active:scale-95 flex items-center justify-center gap-1.5" id="btn-close-table">
+                            <i class="fa-solid fa-flag-checkered text-base md:text-lg"></i> <span id="btn-close-label">Cerrar Pedido</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANTALLA DE COCINA (KDS) -->
+            <div id="view-cocina" class="p-3 sm:p-5 md:p-6 hidden h-full flex flex-col max-w-7xl mx-auto pb-24 md:pb-6">
+                <div class="flex gap-2 mb-4 shrink-0 overflow-x-auto no-scrollbar pb-1 text-xs md:text-sm font-bold">
+                    <button onclick="app.setKitchenFilter('all')" class="kds-filter-btn active bg-gray-800 text-white px-4 py-2.5 rounded-xl shadow-sm whitespace-nowrap" data-filter="all">Todos Activos</button>
+                    <button onclick="app.setKitchenFilter('pending')" class="kds-filter-btn bg-white text-gray-700 border px-4 py-2.5 rounded-xl whitespace-nowrap hover:bg-gray-100" data-filter="pending">⏳ Nuevos</button>
+                    <button onclick="app.setKitchenFilter('preparing')" class="kds-filter-btn bg-white text-gray-700 border px-4 py-2.5 rounded-xl whitespace-nowrap hover:bg-gray-100" data-filter="preparing">🍳 En Prep.</button>
+                    <button onclick="app.setKitchenFilter('ready')" class="kds-filter-btn bg-white text-gray-700 border px-4 py-2.5 rounded-xl whitespace-nowrap hover:bg-gray-100" data-filter="ready">✅ Listos</button>
+                </div>
+                
+                <div id="kitchen-container" class="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-24 md:pb-6 items-start content-start">
+                    <!-- Kitchen cards -->
+                </div>
+            </div>
+
+            <!-- ADMINISTRAR MENÚ -->
+            <div id="view-menu" class="p-3 sm:p-5 md:p-6 hidden pb-24 md:pb-6 max-w-5xl mx-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg md:text-xl font-black text-gray-800">Administrar Menú</h2>
+                    <button onclick="app.openCategoryModal()" class="text-blue-700 font-extrabold text-xs md:text-sm bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3.5 py-2 rounded-xl flex items-center gap-1.5">
+                        <i class="fa-solid fa-folder-plus"></i> Categoría
+                    </button>
+                </div>
+                <p class="text-xs md:text-sm text-gray-500 mb-4 bg-blue-50 p-3 rounded-2xl border border-blue-100 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-info text-blue-600 text-base"></i> Mantén pulsado o arrastra el ícono <i class="fa-solid fa-grip-vertical text-gray-400"></i> para reordenar categorías y productos.
+                </p>
+                <div id="menu-admin-list" class="space-y-4"></div>
+                
+                <button onclick="app.openProductModal()" class="fixed bottom-20 md:bottom-8 right-6 md:right-10 bg-blue-600 hover:bg-blue-700 text-white w-14 h-14 md:w-16 h-16 rounded-full flex items-center justify-center active:scale-95 shadow-2xl border-2 border-white z-30 transition-transform">
+                    <i class="fa-solid fa-plus text-2xl md:text-3xl"></i>
+                </button>
+            </div>
+
+            <!-- HISTORIAL DE VENTAS Y CARPETAS -->
+            <div id="view-historial" class="p-3 sm:p-5 md:p-6 hidden flex flex-col h-full max-w-5xl mx-auto pb-24 md:pb-6">
+                <div class="flex gap-2 mb-3 shrink-0 overflow-x-auto no-scrollbar pb-1 text-xs md:text-sm font-bold">
+                    <button onclick="app.loadHistory('all')" class="px-4 py-2 bg-blue-100 text-blue-800 rounded-full whitespace-nowrap active:bg-blue-200">Todas las cuentas</button>
+                    <button onclick="app.loadHistory('pending')" class="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-full whitespace-nowrap active:bg-yellow-200">Con saldo</button>
+                    <button onclick="app.loadHistory('closed')" class="px-4 py-2 bg-green-100 text-green-800 rounded-full whitespace-nowrap active:bg-green-200">Pagadas</button>
+                    <button onclick="app.loadHistory('cancelled')" class="px-4 py-2 bg-red-100 text-red-800 rounded-full whitespace-nowrap active:bg-red-200">Anuladas</button>
+                </div>
+                <div class="mb-3 relative">
+                    <input type="text" id="history-search" placeholder="🔍 Buscar por N° Pedido, Mesa o Cliente..." class="w-full bg-white border border-gray-300 text-xs md:text-sm font-bold p-3.5 rounded-2xl shadow-sm focus:outline-none focus:border-blue-500" onkeyup="app.filterHistory()">
+                </div>
+                <div id="history-list" class="flex-1 overflow-y-auto pb-24 md:pb-6 space-y-4"></div>
+            </div>
+
+            <!-- CIERRE DEL DÍA Y REPORTES PDF -->
+            <div id="view-cierre" class="p-3 sm:p-5 md:p-6 hidden max-w-4xl mx-auto pb-24 md:pb-6">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border mb-4">
+                    <label class="block text-xs md:text-sm font-bold text-gray-600 mb-1.5">Seleccionar Fecha del Cierre</label>
+                    <input type="date" id="cierre-date" class="w-full border rounded-xl p-3 bg-gray-50 text-sm md:text-base font-bold focus:outline-none focus:border-blue-500" onchange="app.generateDailySummary()">
+                </div>
+                
+                <div id="cierre-dashboard" class="space-y-4 hidden">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bg-white p-4 md:p-5 rounded-2xl shadow-sm border text-center">
+                            <p class="text-xs md:text-sm text-gray-500 font-bold mb-1">Efectivamente Cobrado</p>
+                            <p class="text-3xl md:text-4xl font-black text-green-600" id="cd-cobrado">Bs 0.00</p>
+                            <p class="text-[11px] text-gray-400 mt-1">Ingresado en caja hoy</p>
+                        </div>
+                        <div class="bg-white p-4 md:p-5 rounded-2xl shadow-sm border text-center">
+                            <p class="text-xs md:text-sm text-gray-500 font-bold mb-1">Total Facturado</p>
+                            <p class="text-3xl md:text-4xl font-black text-blue-600" id="cd-facturado">Bs 0.00</p>
+                            <p class="text-[11px] text-gray-400 mt-1">Ventas válidas</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 md:p-5 rounded-2xl shadow-sm border">
+                        <h3 class="font-extrabold text-sm md:text-base text-gray-800 mb-3 border-b pb-2">Desglose por Método de Pago</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs md:text-sm font-semibold">
+                            <div class="flex justify-between sm:flex-col sm:items-center bg-gray-50 p-3 rounded-xl border"><span><i class="fa-solid fa-money-bill text-green-500 mr-1"></i> Efectivo:</span> <span class="font-bold text-gray-800" id="cd-efectivo">Bs 0.00</span></div>
+                            <div class="flex justify-between sm:flex-col sm:items-center bg-gray-50 p-3 rounded-xl border"><span><i class="fa-solid fa-qrcode text-blue-500 mr-1"></i> Pago QR:</span> <span class="font-bold text-gray-800" id="cd-qr">Bs 0.00</span></div>
+                            <div class="flex justify-between sm:flex-col sm:items-center bg-gray-50 p-3 rounded-xl border"><span><i class="fa-solid fa-credit-card text-orange-500 mr-1"></i> Tarjeta:</span> <span class="font-bold text-gray-800" id="cd-tarjeta">Bs 0.00</span></div>
+                            <div class="flex justify-between sm:flex-col sm:items-center bg-gray-50 p-3 rounded-xl border"><span><i class="fa-solid fa-ellipsis text-gray-500 mr-1"></i> Otros:</span> <span class="font-bold text-gray-800" id="cd-otros">Bs 0.00</span></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border text-center">
+                            <p class="text-xs text-gray-500 font-bold">Cuentas Atendidas</p>
+                            <p class="text-2xl font-black text-gray-800" id="cd-cuentas">0</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border text-center">
+                            <p class="text-xs text-gray-500 font-bold">Saldo por Cobrar</p>
+                            <p class="text-2xl font-black text-red-500" id="cd-pendiente">Bs 0.00</p>
+                        </div>
+                    </div>
+                    
+                    <p class="text-xs text-gray-400 text-center font-semibold italic">* Los pedidos anulados no se incluyen en los totales.</p>
+
+                    <button onclick="app.generatePDF()" class="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black shadow-md active:scale-95 flex items-center justify-center text-sm md:text-base gap-2 mt-3 transition-colors">
+                        <i class="fa-solid fa-file-pdf text-xl"></i> Generar Reporte PDF del Día
+                    </button>
+                </div>
+
+                <div id="cierre-empty" class="text-center py-16 text-gray-400 hidden">
+                    <i class="fa-solid fa-calendar-times text-5xl mb-3"></i>
+                    <p class="text-sm font-bold">No existen ventas ni pagos registrados en la fecha seleccionada.</p>
+                </div>
+            </div>
+
+            <!-- AJUSTES Y RESPALDO -->
+            <div id="view-config" class="p-3 sm:p-5 md:p-6 hidden space-y-5 pb-24 md:pb-6 max-w-4xl mx-auto">
+                <div class="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border">
+                    <h3 class="font-extrabold text-base md:text-lg mb-4 text-gray-800 flex items-center gap-2.5"><i class="fa-solid fa-store text-blue-600"></i> Ajustes del Local</h3>
+                    <div class="space-y-4 text-xs md:text-sm">
+                        <div>
+                            <label class="block font-bold text-gray-600 mb-1.5">Nombre del Restaurante</label>
+                            <input type="text" id="cfg-nombre" class="w-full border rounded-xl p-3 bg-gray-50 font-bold text-sm md:text-base focus:outline-none focus:border-blue-500" value="Mi Restaurante">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-gray-600 mb-1.5">Cantidad de Mesas Físicas</label>
+                            <input type="number" id="cfg-mesas" class="w-full border rounded-xl p-3 bg-gray-50 font-bold text-sm md:text-base focus:outline-none focus:border-blue-500" value="15" min="1" max="100">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-gray-600 mb-1.5">Siguiente N° de Pedido (Reiniciar o Definir)</label>
+                            <input type="number" id="cfg-order-number" class="w-full border rounded-xl p-3 bg-gray-50 font-bold text-sm md:text-base focus:outline-none focus:border-blue-500" value="1" min="1">
+                        </div>
+                        <button onclick="app.saveSettings()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-extrabold text-sm md:text-base active:scale-95 transition-colors">Guardar Configuración</button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border">
+                    <h3 class="font-extrabold text-base md:text-lg mb-2 text-gray-800 flex items-center gap-2.5"><i class="fa-solid fa-database text-green-600"></i> Copias de Seguridad</h3>
+                    <p class="text-xs md:text-sm text-gray-500 mb-4">Tus ventas y pedidos están respaldados en la base local. Descarga copias periódicas.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs md:text-sm">
+                        <button onclick="app.exportData()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3.5 rounded-xl font-extrabold flex items-center justify-center gap-2 active:scale-95 transition-colors">
+                            <i class="fa-solid fa-download text-base"></i> Exportar Copia
+                        </button>
+                        
+                        <div class="relative w-full">
+                            <input type="file" id="file-restore" accept=".json" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="app.handleFileSelect(event)">
+                            <button class="w-full border-2 border-dashed border-gray-300 text-gray-700 py-3.5 rounded-xl font-extrabold flex items-center justify-center gap-2 pointer-events-none">
+                                <i class="fa-solid fa-upload text-base"></i> Restaurar Copia
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-red-50 p-4 sm:p-6 rounded-2xl shadow-sm border border-red-200">
+                     <h3 class="font-extrabold text-sm md:text-base mb-1 text-red-800 flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation"></i> Reiniciar Datos</h3>
+                     <p class="text-xs text-red-600 mb-4">Esta acción borrará todo el historial si necesitas empezar de cero.</p>
+                     <button onclick="app.factoryReset()" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-extrabold text-xs md:text-sm active:scale-95 transition-colors">
+                        Borrar Base de Datos Actual
+                    </button>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Modal Genérico Reutilizable -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4">
+        <div id="modal-content" class="bg-white w-full sm:w-[28rem] md:w-[32rem] rounded-t-3xl sm:rounded-3xl shadow-2xl modal-enter max-h-[92vh] flex flex-col overflow-hidden">
+            <div class="px-5 py-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
+                <h3 id="modal-title" class="text-base md:text-lg font-extrabold text-gray-800 truncate">Título</h3>
+                <button onclick="app.closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 active:scale-95">&times;</button>
+            </div>
+            <div id="modal-body" class="p-5 overflow-y-auto no-scrollbar"></div>
+            <div id="modal-footer" class="px-5 py-3.5 border-t bg-gray-50 flex justify-end gap-2.5 shrink-0"></div>
+        </div>
+    </div>
+
+    <!-- Toast Component -->
+    <div id="toast" class="fixed bottom-20 md:bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-2xl z-50 text-xs md:text-sm font-bold hidden flex items-center gap-2.5 pointer-events-none toast-enter w-max max-w-[90vw]">
+        <i class="fa-solid fa-circle-check text-green-400 text-base"></i>
+        <span id="toast-msg">Mensaje</span>
+    </div>
+
+    <!-- INTEGRACIÓN REALTIME DATABASE -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, get, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyBe_p1g5n7WaB7XAttr1F7ZajyB6ZzwV20",
+          authDomain: "restopos-10d13.firebaseapp.com",
+          projectId: "restopos-10d13",
+          storageBucket: "restopos-10d13.firebasestorage.app",
+          messagingSenderId: "820906307684",
+          appId: "1:820906307684:web:acb97bdf1ee4691605af71",
+          databaseURL: "https://restopos-10d13-default-rtdb.firebaseio.com"
+        };
+
+        const fbApp = initializeApp(firebaseConfig);
+        const fbDb = getDatabase(fbApp);
+
+        window.fbApp = fbApp;
+        window.fbDb = fbDb;
+        window.fbRef = ref;
+        window.fbSet = set;
+        window.fbGet = get;
+        window.fbRemove = remove;
+        window.fbOnValue = onValue;
+    </script>
+
+    <script>
+        // --- UTILIDADES GLOBALES Y FORMATEO DE HORAS ---
+        const formatMoney = (amount) => `Bs ${parseFloat(amount || 0).toFixed(2)}`;
+        
+        const formatTime = (timestamp) => {
+            if (!timestamp) return '00:00';
+            const d = new Date(timestamp);
+            if (isNaN(d.getTime())) return '00:00';
+            return d.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', hour12: false });
+        };
+
+        const formatDate = (timestamp) => {
+            if (!timestamp) return 'Fecha inválida';
+            const d = new Date(timestamp);
+            if (isNaN(d.getTime())) return 'Fecha inválida';
+            return d.toLocaleDateString('es-BO') + ' ' + d.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
+        };
+
+        const getStartOfDay = (dateString) => {
+            const [y, m, d] = dateString.split('-');
+            return new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+        };
+
+        const getEndOfDay = (dateString) => {
+            const [y, m, d] = dateString.split('-');
+            return new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+        };
+
+        const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2);
+
+        // MAPEO DE CÓDIGOS CORREGIDO
+        const CODE_MAP = {
+            'Milanesa Picada Carne (1 pers)': '½MC',
+            'Milanesa Picada Pollo (1 pers)': '½MP',
+            'Milanesa Picada Mixta (1 pers)': '½MX',
+            'Milanesa Picada Carne (2 pers)': '1MC',
+            'Milanesa Picada Pollo (2 pers)': '1MP',
+            'Milanesa Picada Mixta (2 pers)': '1MX',
+            'Napolitana Carne': 'NC',
+            'Napolitana Pollo': 'NP',
+            'Parmesana Carne': 'PC',
+            'Parmesana Pollo': 'PP',
+            'Hamburguesa': 'HB',
+            'Lomito': 'LO',
+            'Tropi': 'TR',
+            'Coca-Cola Personal': 'CC',
+            'Coca-Cola Zero Personal': 'CZ',
+            'Fanta Personal': 'FA',
+            'Guaraná Personal': 'GU',
+            'Coca-Cola 2 Litros': 'CC2L',
+            'Coca-Cola 2 Litros Zero': 'CZ2L',
+            'Lima en vaso': 'AV',
+            'Lima en jarra chica': 'AJC',
+            'Lima en jarra grande': 'AJG',
+            'Limonada en vaso': 'LV',
+            'Limonada en jarra chica': 'LJC',
+            'Limonada en jarra grande': 'LJG',
+            'Agua personal con gas': 'AG',
+            'Agua personal sin gas': 'ASG'
+        };
+
+        class App {
+            constructor() {
+                this.currentView = '';
+                this.settings = { id: 'appConfig', restaurantName: 'Mi Restaurante', tableCount: 15, lastOrderNumber: 0, lastOrderDate: '' };
+                this.activeOrder = null;
+                this.mainFilter = 'all';
+                this.kitchenFilter = 'all';
+                this.isAddingItem = false;
+                
+                this.cachedOrders = [];
+                this.cachedOrderItems = [];
+                this.cachedPayments = [];
+                this.cachedCategories = [];
+                this.cachedProducts = [];
+            }
+
+            async init() {
+                if (!window.fbDb) {
+                    setTimeout(() => this.init(), 100);
+                    return;
+                }
+
+                await this.loadSettings();
+                await this.checkSeedData();
+                this.setupRealtimeListeners();
+                
+                this.switchView('view-mesas');
+                
+                const today = new Date();
+                const yyyy = today.getFullYear();
+                const mm = String(today.getMonth() + 1).padStart(2, '0');
+                const dd = String(today.getDate()).padStart(2, '0');
+                document.getElementById('cierre-date').value = `${yyyy}-${mm}-${dd}`;
+            }
+
+            setupRealtimeListeners() {
+                window.fbOnValue(window.fbRef(window.fbDb, 'orders'), (snapshot) => {
+                    const data = snapshot.val();
+                    this.cachedOrders = data ? Object.values(data) : [];
+                    if (this.currentView === 'view-mesas') this.renderMainScreen();
+                    if (this.currentView === 'view-cocina') this.renderKitchen();
+                    if (this.currentView === 'view-historial') this.loadHistory(this.historyFilter);
+                    if (this.currentView === 'view-table-detail' && this.activeOrder) {
+                        const updatedOrder = this.cachedOrders.find(o => o.id === this.activeOrder.id);
+                        if (updatedOrder) {
+                            this.activeOrder = updatedOrder;
+                            this.updatePrepStatusButtonsUI(this.activeOrder.prepStatus);
+                            // También recargamos los detalles visuales por si hay cambios remotos
+                            this.renderOrderDetails();
+                        }
+                    }
+                });
+
+                window.fbOnValue(window.fbRef(window.fbDb, 'orderItems'), (snapshot) => {
+                    const data = snapshot.val();
+                    this.cachedOrderItems = data ? Object.values(data) : [];
+                    if (this.currentView === 'view-table-detail') this.renderOrderDetails();
+                    if (this.currentView === 'view-cocina') this.renderKitchen();
+                });
+
+                window.fbOnValue(window.fbRef(window.fbDb, 'payments'), (snapshot) => {
+                    const data = snapshot.val();
+                    this.cachedPayments = data ? Object.values(data) : [];
+                    if (this.currentView === 'view-table-detail') this.renderOrderDetails();
+                });
+
+                window.fbOnValue(window.fbRef(window.fbDb, 'categories'), (snapshot) => {
+                    const data = snapshot.val();
+                    this.cachedCategories = data ? Object.values(data) : [];
+                    if (this.currentView === 'view-menu') this.renderMenuAdmin();
+                });
+
+                window.fbOnValue(window.fbRef(window.fbDb, 'products'), (snapshot) => {
+                    const data = snapshot.val();
+                    this.cachedProducts = data ? Object.values(data) : [];
+                    if (this.currentView === 'view-menu') this.renderMenuAdmin();
+                });
+            }
+
+            async fbSave(path, data) { await window.fbSet(window.fbRef(window.fbDb, path), data); }
+            async fbGet(path) { const snapshot = await window.fbGet(window.fbRef(window.fbDb, path)); return snapshot.val(); }
+            async fbDelete(path) { await window.fbRemove(window.fbRef(window.fbDb, path)); }
+
+            async loadSettings() {
+                const s = await this.fbGet('settings/appConfig');
+                if (s) {
+                    this.settings = { ...this.settings, ...s };
+                } else {
+                    await this.fbSave('settings/appConfig', this.settings);
+                }
+                
+                document.getElementById('cfg-nombre').value = this.settings.restaurantName;
+                document.getElementById('cfg-mesas').value = this.settings.tableCount;
+                document.getElementById('cfg-order-number').value = this.settings.lastOrderNumber + 1;
+                document.getElementById('nav-brand-title').innerText = this.settings.restaurantName;
+                document.title = this.settings.restaurantName;
+            }
+
+            async getNextOrderNumber() {
+                // Correlativo oficial calculado solo con pedidos reales de la fecha local actual.
+                const now = new Date();
+                const dateKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+                const start = getStartOfDay(dateKey), end = getEndOfDay(dateKey);
+                const all = await this.fbGet('orders') || {};
+                const officialToday = Object.values(all).filter(o => {
+                    if (!o || o.isTest || o.status === 'cancelled' || o.createdAt === undefined || o.createdAt === null || o.createdAt === '') return false;
+                    const created = typeof o.createdAt === 'number' ? o.createdAt : (Number.isFinite(Number(o.createdAt)) ? Number(o.createdAt) : new Date(o.createdAt).getTime());
+                    return Number.isFinite(created) && created >= start && created <= end;
+                });
+                const next = officialToday.reduce((max, o) => Math.max(max, parseInt(o.orderNumber, 10) || 0), 0) + 1;
+                this.settings.lastOrderDate = dateKey;
+                this.settings.lastOrderNumber = next;
+                await this.fbSave('settings/appConfig', this.settings);
+                return String(next).padStart(3, '0');
+            }
+
+            async checkSeedData() {
+                let cats = await this.fbGet('categories');
+                if (!cats || Object.keys(cats).length === 0) {
+                    const catIdMil = generateId(); const catIdFast = generateId(); const catIdCitric = generateId(); const catIdDrink = generateId();
+                    
+                    const initCats = {
+                        [catIdMil]: { id: catIdMil, name: 'Milanesas', order: 1 },
+                        [catIdFast]: { id: catIdFast, name: 'Comidas Rápidas', order: 2 },
+                        [catIdCitric]: { id: catIdCitric, name: 'Bebidas Cítricas', order: 3 },
+                        [catIdDrink]: { id: catIdDrink, name: 'Gaseosas y Refrescos', order: 4 }
+                    };
+                    await this.fbSave('categories', initCats);
+
+                    const defaultProducts = [
+                        { categoryId: catIdMil, name: 'Napolitana Carne', price: 40, active: true },
+                        { categoryId: catIdMil, name: 'Napolitana Pollo', price: 40, active: true },
+                        { categoryId: catIdMil, name: 'Parmesana Carne', price: 40, active: true },
+                        { categoryId: catIdMil, name: 'Parmesana Pollo', price: 40, active: true },
+                        { categoryId: catIdMil, name: 'Milanesa Picada Mixta (1 pers)', price: 40, active: true },
+                        { categoryId: catIdMil, name: 'Milanesa Picada Carne (1 pers)', price: 40, active: true },
+                        { categoryId: catIdMil, name: 'Milanesa Picada Pollo (1 pers)', price: 40, active: true },
+                        { categoryId: catIdMil, name: 'Milanesa Picada Mixta (2 pers)', price: 70, active: true },
+                        { categoryId: catIdMil, name: 'Milanesa Picada Carne (2 pers)', price: 70, active: true },
+                        { categoryId: catIdMil, name: 'Milanesa Picada Pollo (2 pers)', price: 70, active: true },
+                        { categoryId: catIdFast, name: 'Hamburguesa', price: 25, active: true },
+                        { categoryId: catIdFast, name: 'Lomito', price: 25, active: true },
+                        { categoryId: catIdCitric, name: 'Lima en vaso', price: 5, active: true },
+                        { categoryId: catIdCitric, name: 'Limonada en vaso', price: 5, active: true },
+                        { categoryId: catIdCitric, name: 'Lima en jarra chica', price: 10, active: true },
+                        { categoryId: catIdCitric, name: 'Limonada en jarra chica', price: 10, active: true },
+                        { categoryId: catIdCitric, name: 'Lima en jarra grande', price: 15, active: true },
+                        { categoryId: catIdCitric, name: 'Limonada en jarra grande', price: 15, active: true },
+                        { categoryId: catIdDrink, name: 'Coca-Cola 2 Litros', price: 20, active: true },
+                        { categoryId: catIdDrink, name: 'Coca-Cola 2 Litros Zero', price: 20, active: true },
+                        { categoryId: catIdDrink, name: 'Coca-Cola Personal', price: 8, active: true },
+                        { categoryId: catIdDrink, name: 'Coca-Cola Zero Personal', price: 8, active: true },
+                        { categoryId: catIdDrink, name: 'Fanta Personal', price: 8, active: true },
+                        { categoryId: catIdDrink, name: 'Guaraná Personal', price: 8, active: true },
+                        { categoryId: catIdDrink, name: 'Tropi', price: 15, active: true },
+                        { categoryId: catIdDrink, name: 'Agua personal con gas', price: 7, active: true },
+                        { categoryId: catIdDrink, name: 'Agua personal sin gas', price: 7, active: true }
+                    ];
+                    
+                    const initProds = {};
+                    let orderIndex = 0;
+                    for (let p of defaultProducts) {
+                        p.id = generateId();
+                        p.order = orderIndex++;
+                        initProds[p.id] = p;
+                    }
+                    await this.fbSave('products', initProds);
+                }
+            }
+
+            switchView(viewId) {
+                if (viewId === 'mesas') viewId = 'view-mesas';
+                if (viewId === 'menu') viewId = 'view-menu';
+                if (viewId === 'historial') viewId = 'view-historial';
+                if (viewId === 'cierre') viewId = 'view-cierre';
+                if (viewId === 'config') viewId = 'view-config';
+                
+                const targetId = viewId.startsWith('view-') ? viewId : 'view-' + viewId;
+
+                ['view-mesas', 'view-table-detail', 'view-menu', 'view-historial', 'view-cierre', 'view-config', 'view-cocina'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.add('hidden');
+                });
+                
+                document.querySelectorAll('.nav-btn').forEach(btn => {
+                    if(btn.dataset.target === targetId || (targetId === 'view-table-detail' && btn.dataset.target === 'view-mesas')) {
+                        btn.classList.add('text-blue-600', 'md:bg-blue-50');
+                        btn.classList.remove('text-gray-400');
+                    } else {
+                        btn.classList.remove('text-blue-600', 'md:bg-blue-50');
+                        btn.classList.add('text-gray-400');
+                    }
+                });
+
+                const targetEl = document.getElementById(targetId);
+                if (targetEl) targetEl.classList.remove('hidden');
+                
+                this.currentView = targetId;
+
+                if (targetId === 'view-mesas') {
+                    document.getElementById('header-title').innerText = this.settings.restaurantName;
+                    this.renderMainScreen();
+                } else if (targetId === 'view-menu') {
+                    document.getElementById('header-title').innerText = "Menú y Precios";
+                    this.renderMenuAdmin();
+                } else if (targetId === 'view-historial') {
+                    document.getElementById('header-title').innerText = "Historial de Ventas";
+                    this.loadHistory('all');
+                } else if (targetId === 'view-cierre') {
+                    document.getElementById('header-title').innerText = "Cierre del Día";
+                    this.generateDailySummary();
+                } else if (targetId === 'view-config') {
+                    document.getElementById('header-title').innerText = "Ajustes del Sistema";
+                } else if (targetId === 'view-cocina') {
+                    document.getElementById('header-title').innerText = "Cocina";
+                    this.renderKitchen();
+                }
+            }
+
+            setMainFilter(filter) {
+                this.mainFilter = filter;
+                document.querySelectorAll('.main-filter-btn').forEach(btn => {
+                    if (btn.dataset.filter === filter) {
+                        btn.className = "main-filter-btn active bg-blue-800 text-white px-4 py-2.5 rounded-xl shadow-sm whitespace-nowrap";
+                    } else {
+                        btn.className = "main-filter-btn bg-white text-gray-700 border px-4 py-2.5 rounded-xl whitespace-nowrap hover:bg-gray-100";
+                    }
+                });
+                this.renderMainScreen();
+            }
+
+            // UNIFICACIÓN DE LECTURA DE MESAS OCUPADAS Y FILTRADO DE CORRECCIÓN #7 Y #4
+            getOccupiedTables() {
+                const active = this.cachedOrders.filter(o => o.status !== 'closed' && o.status !== 'cancelled' && o.destination === 'dine_in');
+                return active.map(o => parseInt(o.tableNumber)).filter(num => !isNaN(num));
+            }
+
+            renderMainScreen() {
+                const activeOrders = this.cachedOrders.filter(o => !o.isTest && o.status !== 'closed' && o.status !== 'cancelled');
+
+                const sectionOfftable = document.getElementById('section-offtable-orders');
+                const containerOfftable = document.getElementById('container-offtable-orders');
+                const sectionTables = document.getElementById('section-tables');
+                const containerTables = document.getElementById('container-tables');
+
+                containerOfftable.innerHTML = '';
+                containerTables.innerHTML = '';
+
+                const offTableOrders = activeOrders.filter(o => o.destination !== 'dine_in');
+                
+                if (offTableOrders.length > 0 && (this.mainFilter === 'all' || this.mainFilter === 'takeout' || this.mainFilter === 'pending')) {
+                    sectionOfftable.classList.remove('hidden');
+                    
+                    offTableOrders.forEach(order => {
+                        if (this.mainFilter === 'takeout' && order.destination !== 'takeout') return;
+                        if (this.mainFilter === 'pending' && order.destination !== 'pending') return;
+
+                        const isTakeout = order.destination === 'takeout';
+                        const badgeColor = isTakeout ? 'bg-purple-100 text-purple-900 border-purple-200' : 'bg-yellow-100 text-yellow-900 border-yellow-200';
+                        const destText = isTakeout ? '🛍️ Para Llevar' : '⏳ Pendiente';
+                        const orderNumText = order.orderNumber ? `#${order.orderNumber}` : '';
+
+                        let prepBadge = '<span class="text-[10px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">Cocina: Pdte</span>';
+                        if (order.prepStatus === 'preparing') prepBadge = '<span class="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold">Cocina: En Prep.</span>';
+                        if (order.prepStatus === 'ready') prepBadge = '<span class="text-xs bg-green-600 text-white px-2 py-1 rounded font-black shadow animate-pulse">¡LISTO PARA ENTREGAR!</span>';
+                        if (order.prepStatus === 'delivered') prepBadge = '<span class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-bold">Entregado</span>';
+
+                        const card = document.createElement('div');
+                        card.className = "bg-white p-3.5 rounded-2xl border shadow-sm flex justify-between items-center active:scale-98 transition-all cursor-pointer desktop-card-hover border-gray-200 hover:border-blue-300";
+                        card.onclick = () => this.openOrder(order);
+                        
+                        // CORRECCIÓN #4: Formateo correcto de la hora real
+                        const orderTime = formatTime(order.createdAt);
+                        const customerText = order.customerName ? order.customerName : 'Sin nombre';
+
+                        card.innerHTML = `
+                            <div>
+                                <div class="flex items-center gap-1.5 mb-1">
+                                    <span class="font-black text-xs md:text-sm text-gray-800">${orderNumText}</span>
+                                    <span class="px-2 py-0.5 rounded-md text-[10px] md:text-xs font-black border ${badgeColor}">${destText}</span>
+                                </div>
+                                <div class="text-[11px] md:text-xs text-gray-500 font-semibold mb-1">${customerText} • ${orderTime}</div>
+                                <div>${prepBadge}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-base md:text-lg font-black text-gray-900">${formatMoney(order.total)}</div>
+                                <div class="text-xs text-red-600 font-bold">Sald: ${formatMoney(order.total - (order.paid || 0))}</div>
+                            </div>
+                        `;
+                        containerOfftable.appendChild(card);
+                    });
+                } else {
+                    sectionOfftable.classList.add('hidden');
+                }
+
+                if (this.mainFilter === 'all' || this.mainFilter === 'tables') {
+                    sectionTables.classList.remove('hidden');
+
+                    for (let i = 1; i <= this.settings.tableCount; i++) {
+                        const order = activeOrders.find(o => o.destination === 'dine_in' && parseInt(o.tableNumber) === i);
+                        let statusClass = "bg-green-100 border-green-300 text-green-800 hover:bg-green-200";
+                        let statusIcon = "fa-check-circle";
+                        let infoHtml = "<span class='text-[10px] font-bold opacity-75'>Libre</span>";
+                        let prepBadge = "";
+
+                        if (order) {
+                            if (order.prepStatus === 'pending') prepBadge = '<span class="text-[9px] bg-yellow-500 text-white px-1.5 rounded font-bold mb-0.5 shadow-sm">Pdte</span>';
+                            else if (order.prepStatus === 'preparing') prepBadge = '<span class="text-[9px] bg-blue-500 text-white px-1.5 rounded font-bold mb-0.5 shadow-sm">En Prep</span>';
+                            else if (order.prepStatus === 'ready') prepBadge = '<span class="text-[11px] bg-green-600 text-white px-2 py-0.5 rounded-lg font-black mb-0.5 shadow-md animate-pulse">¡LISTO!</span>';
+
+                            if (order.status === 'open') {
+                                statusClass = "bg-red-100 border-red-400 text-red-900 shadow-sm hover:bg-red-200";
+                                statusIcon = "fa-users";
+                                infoHtml = `<span class='text-xs font-black'>${formatMoney(order.total)}</span>`;
+                            } else if (order.status === 'pending') {
+                                statusClass = "bg-orange-100 border-orange-400 text-orange-900 shadow-sm hover:bg-orange-200";
+                                statusIcon = "fa-clock";
+                                infoHtml = `<span class='text-[10px] font-black'>Pte: ${formatMoney(order.total - (order.paid || 0))}</span>`;
+                            }
+                        }
+
+                        const btn = document.createElement('button');
+                        btn.className = `aspect-square rounded-2xl border-2 flex flex-col items-center justify-center p-2 transition-all active:scale-95 desktop-card-hover ${statusClass}`;
+                        btn.onclick = () => this.openTable(i, order);
+                        btn.innerHTML = `
+                            ${prepBadge}
+                            <span class="text-lg md:text-2xl font-black">${i}</span>
+                            <i class="fa-solid ${statusIcon} text-[10px] md:text-xs my-0.5 opacity-80"></i>
+                            ${infoHtml}
+                        `;
+                        containerTables.appendChild(btn);
+                    }
+                } else {
+                    sectionTables.classList.add('hidden');
+                }
+            }
+
+            openNewOrderModal() {
+                // CORRECCIÓN #7: Mismo cálculo unificado que en la pantalla principal
+                const occupiedTables = this.getOccupiedTables();
+
+                let tableButtonsHtml = '';
+                for (let i = 1; i <= this.settings.tableCount; i++) {
+                    const isOccupied = occupiedTables.includes(i);
+                    tableButtonsHtml += `
+                        <button onclick="app.createNewOrder('dine_in', ${i})" ${isOccupied ? 'disabled' : ''} 
+                                class="p-2.5 rounded-xl border-2 font-black text-xs md:text-sm flex flex-col items-center justify-center ${isOccupied ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-green-50 text-green-800 border-green-300 active:bg-green-200 hover:bg-green-100'}">
+                            <span>Mesa ${i}</span>
+                            <span class="text-[9px] font-normal">${isOccupied ? 'Ocupada' : 'Libre'}</span>
+                        </button>
+                    `;
+                }
+
+                // CORRECCIÓN DEL VIDEO: Quitamos la solicitud de nombre para "Para Llevar"
+                const html = `
+                    <div class="space-y-4">
+                        <label class="flex items-center gap-3 p-3 rounded-xl border-2 border-amber-300 bg-amber-50 cursor-pointer">
+                            <input id="new-order-is-test" type="checkbox" class="w-5 h-5 accent-amber-600">
+                            <span><b class="block text-sm text-amber-900">Pedido de Prueba</b><small class="text-amber-800">Se guardará en Historial → Pruebas y no contará en ventas ni correlativo real.</small></span>
+                        </label>
+                        <p class="text-xs font-bold text-gray-500 mb-2">Selecciona el destino del nuevo pedido:</p>
+                        
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="app.createNewOrder('takeout')" class="p-3 bg-purple-100 hover:bg-purple-200 border-2 border-purple-300 text-purple-900 rounded-2xl font-black text-xs active:scale-95 flex flex-col items-center shadow-sm">
+                                <i class="fa-solid fa-bag-shopping text-2xl mb-1.5"></i>
+                                <span>🛍️ Para Llevar</span>
+                            </button>
+                            <button onclick="app.createNewOrder('pending')" class="p-3 bg-yellow-100 hover:bg-yellow-200 border-2 border-yellow-300 text-yellow-900 rounded-2xl font-black text-xs active:scale-95 flex flex-col items-center shadow-sm">
+                                <i class="fa-solid fa-hourglass-half text-2xl mb-1.5"></i>
+                                <span>⏳ Pendiente Asignar</span>
+                            </button>
+                        </div>
+
+                        <div class="border-t pt-3">
+                            <p class="text-xs font-bold text-gray-600 mb-2">🪑 O asignar a Mesa Libre:</p>
+                            <div class="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1">
+                                ${tableButtonsHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                this.showModal('📝 + Nuevo Pedido', html, [
+                    { label: 'Cancelar', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.closeModal() }
+                ]);
+            }
+
+            // CORRECCIÓN #5: La orden se guarda en estado borrador y solo se confirma si se añade contenido o confirma
+            async createNewOrder(destination, tableNumber = null, customerName = '', generalNote = '') {
+                const isTest = !!document.getElementById('new-order-is-test')?.checked;
+                // Pruebas no consumen el correlativo oficial diario.
+                const orderNum = isTest ? `P-${Date.now().toString().slice(-6)}` : await this.getNextOrderNumber();
+
+                const newOrder = {
+                    id: generateId(),
+                    orderNumber: orderNum,
+                    isTest: isTest,
+                    tableNumber: tableNumber,
+                    destination: destination,
+                    customerName: customerName,
+                    generalNote: generalNote,
+                    status: 'open',
+                    prepStatus: 'pending',
+                    createdAt: Date.now(),
+                    total: 0,
+                    paid: 0
+                };
+
+                // Guardar la orden en Firebase
+                await this.fbSave(`orders/${newOrder.id}`, newOrder);
+                this.closeModal();
+                
+                this.openOrder(newOrder);
+                this.openQuickAddModal();
+            }
+
+            openTable(tableNumber, existingOrder = null) {
+                if (existingOrder) {
+                    this.openOrder(existingOrder);
+                } else {
+                    this.createNewOrder('dine_in', tableNumber);
+                }
+            }
+
+            openOrder(order) {
+                this.activeOrder = order;
+                
+                let orderNumStr = order.orderNumber ? `(#${order.orderNumber}) ` : '';
+                let titleText = order.destination === 'dine_in' ? `${orderNumStr}Mesa ${order.tableNumber}` : `${orderNumStr}🛍️ Llevar ${order.customerName ? '- ' + order.customerName : ''}`;
+                if (order.destination === 'pending') titleText = `${orderNumStr}⏳ Pdte ${order.customerName ? '- ' + order.customerName : ''}`;
+                document.getElementById('td-title').innerText = titleText;
+
+                let badgeText = "Comer aquí";
+                if (order.destination === 'takeout') badgeText = "Para llevar";
+                if (order.destination === 'pending') badgeText = "Pendiente";
+                document.getElementById('td-dest-badge').innerText = badgeText;
+
+                // Cargar nota general si existe
+                document.getElementById('td-general-note').value = order.generalNote || '';
+
+                // CORRECCIÓN #8: Actualizar la etiqueta del botón de cierre según el tipo
+                const btnCloseLabel = document.getElementById('btn-close-label');
+                if (btnCloseLabel) {
+                    btnCloseLabel.innerText = order.destination === 'dine_in' ? 'Cerrar Mesa' : 'Cerrar Pedido';
+                }
+
+                this.updatePrepStatusButtonsUI(order.prepStatus || 'pending');
+                this.switchView('view-table-detail');
+                this.renderOrderDetails();
+            }
+
+            // CORRECCIÓN DEL VIDEO: Actualizar nota general
+            async updateGeneralNote(note) {
+                if (!this.activeOrder) return;
+                this.activeOrder.generalNote = note;
+                await this.fbSave(`orders/${this.activeOrder.id}/generalNote`, note);
+            }
+
+            updatePrepStatusButtonsUI(status) {
+                const btns = ['pending', 'preparing', 'ready', 'delivered'].map(id => document.getElementById(`prep-btn-${id}`));
+                btns.forEach(b => { if(b) b.className = "px-2.5 py-1 rounded-lg font-bold text-gray-500 whitespace-nowrap bg-transparent transition-all hover:bg-gray-200"; });
+
+                const activeBtn = document.getElementById(`prep-btn-${status}`);
+                if (activeBtn) {
+                    if (status === 'preparing') activeBtn.className = "px-2.5 py-1 rounded-lg font-black bg-blue-600 text-white shadow-sm whitespace-nowrap";
+                    else if (status === 'ready') activeBtn.className = "px-2.5 py-1 rounded-lg font-black bg-green-600 text-white shadow-sm whitespace-nowrap animate-pulse";
+                    else if (status === 'delivered') activeBtn.className = "px-2.5 py-1 rounded-lg font-black bg-gray-600 text-white shadow-sm whitespace-nowrap";
+                    else activeBtn.className = "px-2.5 py-1 rounded-lg font-black bg-yellow-500 text-white shadow-sm whitespace-nowrap";
+                }
+            }
+
+            async setOrderPrepStatus(status) {
+                if (!this.activeOrder) return;
+                this.activeOrder.prepStatus = status;
+                await this.fbSave(`orders/${this.activeOrder.id}/prepStatus`, status);
+                this.updatePrepStatusButtonsUI(status);
+                let msg = status === 'ready' ? '¡Listo!' : status === 'preparing' ? 'En preparación' : status === 'delivered' ? 'Entregado' : 'Pendiente';
+                this.showToast(`Cocina: ${msg}`);
+            }
+
+            async renderOrderDetails() {
+                if (!this.activeOrder) return;
+
+                const items = this.cachedOrderItems.filter(i => i.orderId === this.activeOrder.id);
+                const payments = this.cachedPayments.filter(p => p.orderId === this.activeOrder.id);
+
+                let total = 0;
+                items.forEach(item => total += (item.priceSnapshot * item.quantity));
+
+                let paid = 0;
+                payments.forEach(p => paid += p.amount);
+
+                const balance = total - paid;
+                this.activeOrder.total = total;
+                this.activeOrder.paid = paid;
+
+                let needsUpdate = false;
+
+                if (this.activeOrder.status !== 'cancelled') {
+                    if (paid > 0 && balance > 0 && this.activeOrder.status !== 'pending') {
+                        this.activeOrder.status = 'pending';
+                        needsUpdate = true;
+                    } else if (paid === 0 && total > 0 && this.activeOrder.status !== 'open') {
+                        this.activeOrder.status = 'open';
+                        needsUpdate = true;
+                    }
+                }
+
+                if (needsUpdate) {
+                    await this.fbSave(`orders/${this.activeOrder.id}`, this.activeOrder);
+                } else {
+                    await this.fbSave(`orders/${this.activeOrder.id}/total`, total);
+                    await this.fbSave(`orders/${this.activeOrder.id}/paid`, paid);
+                }
+
+                document.getElementById('td-total').innerText = formatMoney(total);
+                document.getElementById('td-paid').innerText = formatMoney(paid);
+                document.getElementById('td-balance').innerText = formatMoney(balance);
+
+                const list = document.getElementById('td-items-list');
+                list.innerHTML = '';
+
+                if (items.length === 0) {
+                    list.innerHTML += `<div class="text-center text-gray-400 py-12"><i class="fa-solid fa-basket-shopping text-5xl mb-3"></i><p class="font-bold text-sm">No hay pedidos agregados.</p></div>`;
+                } else {
+                    items.sort((a,b) => a.timestamp - b.timestamp);
+                    items.forEach(item => {
+                        const itemTotal = item.priceSnapshot * item.quantity;
+                        const el = document.createElement('div');
+                        el.className = "bg-white p-3.5 rounded-2xl shadow-sm border flex justify-between items-center";
+                        el.innerHTML = `
+                            <div class="flex-1 pr-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-black text-xs md:text-sm bg-blue-100 text-blue-900 w-7 h-7 rounded-full flex items-center justify-center shrink-0">${item.quantity}</span>
+                                    <h4 class="font-bold text-gray-800 text-xs md:text-sm leading-snug">${item.nameSnapshot}</h4>
+                                </div>
+                                <div class="ml-9 text-xs space-y-0.5 mt-1">
+                                    ${item.isTakeout ? '<span class="inline-block px-1.5 py-0.5 bg-purple-100 text-purple-800 font-extrabold rounded text-[10px]">🛍️ Llevar</span>' : ''}
+                                    ${item.note ? `<p class="text-orange-600 font-bold leading-tight"><i class="fa-solid fa-note-sticky mr-1"></i>${item.note}</p>` : ''}
+                                    <p class="text-gray-400 font-semibold">P.U: ${formatMoney(item.priceSnapshot)}</p>
+                                </div>
+                            </div>
+                            <div class="text-right flex flex-col items-end shrink-0">
+                                <span class="font-black text-gray-900 text-sm md:text-base">${formatMoney(itemTotal)}</span>
+                                <div class="flex gap-1 mt-1.5">
+                                    <button onclick="app.openEditNoteModal('${item.id}')" class="text-xs px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-black active:scale-95" title="Editar Nota">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                    <button onclick="app.toggleItemTakeout('${item.id}')" class="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-black active:scale-95" title="Alternar Llevar">
+                                        ${item.isTakeout ? '🪑' : '🛍️'}
+                                    </button>
+                                    <button onclick="app.removeOrderItem('${item.id}')" class="text-xs px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-black active:scale-95">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        list.appendChild(el);
+                    });
+                }
+
+                if (payments.length > 0) {
+                    const payHeader = document.createElement('h3');
+                    payHeader.className = "font-black text-xs text-gray-500 mt-4 mb-2 uppercase tracking-wider";
+                    payHeader.innerText = "Historial de Pagos";
+                    list.appendChild(payHeader);
+
+                    payments.forEach(p => {
+                        let icon = 'fa-money-bill';
+                        if(p.method==='QR') icon = 'fa-qrcode';
+                        if(p.method==='Tarjeta') icon = 'fa-credit-card';
+
+                        const el = document.createElement('div');
+                        el.className = "bg-green-50 p-2.5 rounded-xl border border-green-100 flex justify-between items-center text-xs mb-1.5";
+                        el.innerHTML = `
+                            <div>
+                                <span class="font-bold text-green-900"><i class="fa-solid ${icon} w-4"></i> ${p.method}</span>
+                                ${p.description ? `<span class="text-gray-500 ml-1.5 truncate inline-block max-w-[120px] align-bottom">- ${p.description}</span>` : ''}
+                            </div>
+                            <span class="font-black text-green-700">${formatMoney(p.amount)}</span>
+                        `;
+                        list.appendChild(el);
+                    });
+                }
+            }
+
+            openEditNoteModal(itemId) {
+                const item = this.cachedOrderItems.find(i => i.id === itemId);
+                if (!item) return;
+
+                const html = `
+                    <div class="space-y-3 text-xs">
+                        <div class="bg-blue-50 p-2.5 rounded-xl border border-blue-100 font-bold text-blue-900">
+                            📝 ${item.nameSnapshot}
+                        </div>
+                        <div>
+                            <label class="block font-bold text-gray-600 mb-1">Nota / Observación Especial</label>
+                            <input type="text" id="edit-item-note" value="${item.note || ''}" placeholder="Ej: Sin cebolla, extra mayonesa, sin azúcar..." class="w-full border-2 rounded-xl p-3 bg-gray-50 text-sm font-semibold focus:border-blue-500 outline-none">
+                        </div>
+                    </div>
+                `;
+
+                this.showModal('Editar Nota del Pedido', html, [
+                    { label: 'Cancelar', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.closeModal() },
+                    { label: 'Guardar Nota', class: 'bg-blue-600 hover:bg-blue-700 text-white font-black', onClick: async () => {
+                        item.note = document.getElementById('edit-item-note').value;
+                        await this.fbSave(`orderItems/${item.id}`, item);
+                        this.closeModal();
+                        this.showToast("Nota actualizada.");
+                    }}
+                ]);
+            }
+
+            async toggleItemTakeout(itemId) {
+                const item = this.cachedOrderItems.find(i => i.id === itemId);
+                if (!item) return;
+                await this.fbSave(`orderItems/${item.id}/isTakeout`, !item.isTakeout);
+            }
+
+            async removeOrderItem(itemId) {
+                if (this.activeOrder.paid > 0) {
+                    this.showAlert("No puedes eliminar ítems si la cuenta ya tiene pagos parciales registrados. Considera anular la cuenta si hay un error.");
+                    return;
+                }
+
+                // CORRECCIÓN DEL VIDEO: Eliminar producto sin preguntar
+                await this.fbDelete(`orderItems/${itemId}`);
+            }
+
+            openQuickAddModal() {
+                if (!this.activeOrder || this.activeOrder.status === 'closed' || this.activeOrder.status === 'cancelled') {
+                    this.showAlert("Esta cuenta está cerrada o anulada.");
+                    return;
+                }
+
+                const categories = [...this.cachedCategories];
+                categories.sort((a,b) => (a.order || 0) - (b.order || 0));
+
+                let categoriesTabsHtml = '<div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">';
+                
+                categories.forEach(cat => {
+                    categoriesTabsHtml += `
+                        <button onclick="app.showCategoryProducts('${cat.id}')" class="p-2.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-900 rounded-xl font-extrabold text-[11px] md:text-xs uppercase tracking-wide active:scale-95 text-center shadow-sm">
+                            ${cat.name}
+                        </button>
+                    `;
+                });
+                categoriesTabsHtml += '</div>';
+
+                const html = `
+                    <div id="quick-add-container">
+                        <p class="text-xs font-bold text-gray-500 mb-2">Selecciona una categoría:</p>
+                        ${categoriesTabsHtml}
+                        
+                        <div id="quick-products-list" class="space-y-2 max-h-72 overflow-y-auto px-1 py-1">
+                            <div class="text-center py-6 text-gray-400 text-xs font-bold">Selecciona una categoría arriba.</div>
+                        </div>
+                    </div>
+                `;
+
+                this.showModal('Agregar Producto', html, [
+                    { label: 'Volver a Cuenta', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.closeModal() }
+                ]);
+            }
+
+            showCategoryProducts(catId) {
+                const cat = this.cachedCategories.find(c => c.id === catId);
+                const products = this.cachedProducts.filter(p => p.categoryId === catId);
+                const container = document.getElementById('quick-products-list');
+                container.innerHTML = '';
+
+                const catNameLower = cat ? cat.name.toLowerCase() : '';
+
+                // CORRECCIÓN #2: GUÍAS DE SALSAS CORREGIDAS
+                if (catNameLower.includes('milanesa')) {
+                    const milanesaOptions = [
+                        { title: 'Napolitana', price: 40, desc: '🧀 Guía: Lleva Salsa Blanca', badge: 'Carne / Pollo', action: () => this.showSimpleVariantModal('Napolitana', 40) },
+                        { title: 'Parmesana', price: 40, desc: '🍅 Guía: Lleva Salsa Roja', badge: 'Carne / Pollo', action: () => this.showSimpleVariantModal('Parmesana', 40) },
+                        { title: 'Picada 1 Pers. (Medio)', price: 40, desc: '🥩 1 Persona', badge: 'Carne / Pollo / Mixta', action: () => this.showPicadaVariantModal(1) },
+                        { title: 'Picada 2 Pers. (Entero)', price: 70, desc: '🥩 2 Personas', badge: 'Carne / Pollo / Mixta', action: () => this.showPicadaVariantModal(2) }
+                    ];
+
+                    milanesaOptions.forEach(opt => {
+                        const btn = document.createElement('button');
+                        btn.className = "w-full p-3 bg-white border-2 border-blue-100 hover:border-blue-300 rounded-2xl flex justify-between items-center text-left active:bg-blue-50 mb-2 shadow-sm transition-all";
+                        btn.onclick = opt.action;
+                        btn.innerHTML = `
+                            <div>
+                                <div class="font-black text-sm text-gray-800">${opt.title}</div>
+                                <div class="text-[11px] font-bold text-amber-700 mt-0.5">${opt.desc}</div>
+                                <span class="inline-block mt-1 px-2 py-0.5 bg-blue-50 text-blue-800 text-[10px] font-extrabold rounded-md border border-blue-200">${opt.badge}</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="font-black text-base text-blue-700">${formatMoney(opt.price)}</span>
+                            </div>
+                        `;
+                        container.appendChild(btn);
+                    });
+                    return;
+                }
+
+                if (catNameLower.includes('cítrica') || catNameLower.includes('citrica') || catNameLower.includes('citric') || catNameLower.includes('lima')) {
+                    const citricOptions = [
+                        { title: 'Limonada', desc: '🍋 Vasos y Jarras de Limonada', action: () => this.showCitricModal('Limonada') },
+                        { title: 'Lima', desc: '🟢 Vasos y Jarras de Lima', action: () => this.showCitricModal('Lima') }
+                    ];
+
+                    citricOptions.forEach(opt => {
+                        const btn = document.createElement('button');
+                        btn.className = "w-full p-3 bg-white border-2 border-green-100 hover:border-green-300 rounded-2xl flex justify-between items-center text-left active:bg-green-50 mb-2 shadow-sm transition-all";
+                        btn.onclick = opt.action;
+                        btn.innerHTML = `
+                            <div>
+                                <div class="font-black text-sm text-gray-800">${opt.title}</div>
+                                <div class="text-[11px] font-bold text-green-700 mt-0.5">${opt.desc}</div>
+                                <span class="inline-block mt-1 px-2 py-0.5 bg-gray-50 text-gray-600 text-[10px] font-extrabold rounded-md border">Vaso / J. Chica / J. Grande</span>
+                            </div>
+                            <div class="text-right flex flex-col items-end">
+                                <span class="text-[10px] font-bold text-gray-500">Desde</span>
+                                <span class="font-black text-base text-green-700">Bs 5.00</span>
+                            </div>
+                        `;
+                        container.appendChild(btn);
+                    });
+                    return;
+                }
+
+                if (catNameLower.includes('gaseosa') || catNameLower.includes('refresco') || catNameLower.includes('soda') || catNameLower.includes('bebida')) {
+                    const btnWater = document.createElement('button');
+                    btnWater.className = "w-full p-3 bg-white border-2 border-cyan-100 hover:border-cyan-300 rounded-2xl flex justify-between items-center text-left active:bg-cyan-50 mb-2 shadow-sm transition-all";
+                    btnWater.onclick = () => this.showWaterModal();
+                    btnWater.innerHTML = `
+                        <div>
+                            <div class="font-black text-sm text-gray-800">💧 Agua Personal</div>
+                            <div class="text-[11px] font-bold text-cyan-700 mt-0.5">Con Gas / Sin Gas</div>
+                        </div>
+                        <span class="font-black text-base text-cyan-700">Bs 7.00</span>
+                    `;
+                    container.appendChild(btnWater);
+
+                    const btnSoda = document.createElement('button');
+                    btnSoda.className = "w-full p-3 bg-white border-2 border-red-100 hover:border-red-300 rounded-2xl flex justify-between items-center text-left active:bg-red-50 mb-2 shadow-sm transition-all";
+                    btnSoda.onclick = () => this.showSodaModal();
+                    btnSoda.innerHTML = `
+                        <div>
+                            <div class="font-black text-sm text-gray-800">🥤 Sodas / Gaseosas</div>
+                            <div class="text-[11px] font-bold text-red-700 mt-0.5">2L, Personal, Coca-Cola, Zero, Fanta...</div>
+                        </div>
+                        <span class="font-black text-base text-red-700">Desde Bs 8.00</span>
+                    `;
+                    container.appendChild(btnSoda);
+
+                    const otherDrinks = products.filter(p => p.active && !p.name.toLowerCase().includes('agua') && !p.name.toLowerCase().includes('coca') && !p.name.toLowerCase().includes('fanta') && !p.name.toLowerCase().includes('guaraná'));
+                    otherDrinks.forEach(prod => {
+                        const btn = document.createElement('button');
+                        btn.className = "w-full p-3 bg-white border-2 border-gray-100 rounded-xl flex justify-between items-center text-left active:bg-gray-50 hover:border-blue-200 mb-2 shadow-sm transition-colors";
+                        btn.onclick = () => this.showDirectAddModal(prod.name, prod.price, CODE_MAP[prod.name] || '');
+                        btn.innerHTML = `
+                            <span class="font-black text-sm text-gray-800">${prod.name}</span>
+                            <span class="font-black text-sm text-blue-700 bg-blue-50 px-2 py-1 rounded-lg">${formatMoney(prod.price)}</span>
+                        `;
+                        container.appendChild(btn);
+                    });
+                    return;
+                }
+
+                const activeProds = products.filter(p => p.active);
+                if (activeProds.length === 0) {
+                    container.innerHTML = `<p class="text-xs text-gray-400 text-center py-4">No hay productos activos en esta categoría.</p>`;
+                    return;
+                }
+
+                activeProds.sort((a,b) => (a.order || 0) - (b.order || 0));
+
+                activeProds.forEach(prod => {
+                    const btn = document.createElement('button');
+                    btn.className = "w-full p-3 bg-white border-2 border-gray-100 rounded-xl flex justify-between items-center text-left active:bg-gray-50 hover:border-blue-200 mb-2 shadow-sm transition-colors";
+                    btn.onclick = () => this.handleProductClick(prod);
+                    btn.innerHTML = `
+                        <span class="font-black text-sm text-gray-800">${prod.name}</span>
+                        <span class="font-black text-sm text-blue-700 bg-blue-50 px-2 py-1 rounded-lg">${formatMoney(prod.price)}</span>
+                    `;
+                    container.appendChild(btn);
+                });
+            }
+
+            handleProductClick(prod) {
+                const name = prod.name.toLowerCase();
+
+                if (name.includes('napolitana')) {
+                    this.showSimpleVariantModal('Napolitana', prod.price || 40);
+                    return;
+                }
+                if (name.includes('parmesana')) {
+                    this.showSimpleVariantModal('Parmesana', prod.price || 40);
+                    return;
+                }
+                if (name.includes('picada')) {
+                    if (name.includes('1 pers') || name.includes('1pers')) this.showPicadaVariantModal(1);
+                    else if (name.includes('2 pers') || name.includes('2pers')) this.showPicadaVariantModal(2);
+                    else this.showPicadaVariantModal(null);
+                    return;
+                }
+                if (name.includes('limonada')) {
+                    this.showCitricModal('Limonada');
+                    return;
+                }
+                if (name.includes('lima')) {
+                    this.showCitricModal('Lima');
+                    return;
+                }
+
+                this.showDirectAddModal(prod.name, prod.price, CODE_MAP[prod.name] || '');
+            }
+
+            showWaterModal() {
+                const html = `
+                    <div class="space-y-4">
+                        <div class="bg-cyan-50 p-2.5 rounded-xl border border-cyan-200 font-extrabold text-xs text-cyan-900 text-center">
+                            💧 Agua Personal - Bs 7.00
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-2">Selecciona el tipo de agua:</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button type="button" onclick="app.selectWaterType('con gas')" id="btn-water-gas" class="water-type-btn active p-3 rounded-xl border-2 font-black text-sm bg-cyan-100 border-cyan-600 text-cyan-900 shadow-sm">Con Gas</button>
+                                <button type="button" onclick="app.selectWaterType('sin gas')" id="btn-water-nogas" class="water-type-btn p-3 rounded-xl border-2 font-black text-sm bg-white border-gray-200 text-gray-700 shadow-sm">Sin Gas</button>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-center items-center gap-6 py-2">
+                            <button onclick="document.getElementById('add-qty').value = Math.max(1, parseInt(document.getElementById('add-qty').value) - 1)" class="w-12 h-12 rounded-full bg-gray-200 text-xl font-black flex items-center justify-center active:scale-95 text-gray-700">-</button>
+                            <input type="number" id="add-qty" value="1" min="1" class="w-16 text-center text-3xl font-black focus:outline-none bg-transparent">
+                            <button onclick="document.getElementById('add-qty').value = parseInt(document.getElementById('add-qty').value) + 1" class="w-12 h-12 rounded-full bg-blue-600 text-white text-xl font-black flex items-center justify-center active:scale-95">+</button>
+                        </div>
+
+                        <div class="flex items-center justify-between border-t pt-3">
+                            <span class="text-xs font-bold text-gray-600">¿Para Llevar?</span>
+                            <label class="flex items-center gap-1.5 cursor-pointer font-black text-sm text-purple-900 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-200">
+                                <input type="checkbox" id="add-is-takeout" class="w-4 h-4 text-purple-600"> Sí, llevar (LL)
+                            </label>
+                        </div>
+                    </div>
+                `;
+
+                this.selectedWaterType = 'con gas';
+
+                this.showModal('Agua Personal', html, [
+                    { label: 'Atrás', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.openQuickAddModal() },
+                    { label: 'Añadir al Pedido', class: 'bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-6', onClick: () => {
+                        const fullName = `Agua personal ${this.selectedWaterType}`;
+                        const qty = parseInt(document.getElementById('add-qty').value) || 1;
+                        const isTakeout = document.getElementById('add-is-takeout').checked;
+                        const code = CODE_MAP[fullName] || '';
+                        this.addItemToOrder(fullName, 7, qty, '', isTakeout, code);
+                    }}
+                ]);
+            }
+
+            selectWaterType(type) {
+                this.selectedWaterType = type;
+                document.querySelectorAll('.water-type-btn').forEach(b => b.className = "water-type-btn p-3 rounded-xl border-2 font-black text-sm bg-white border-gray-200 text-gray-700 shadow-sm");
+                const activeBtn = document.getElementById(type === 'con gas' ? 'btn-water-gas' : 'btn-water-nogas');
+                if (activeBtn) activeBtn.className = "water-type-btn active p-3 rounded-xl border-2 font-black text-sm bg-cyan-100 border-cyan-600 text-cyan-900 shadow-sm";
+            }
+
+            showSodaModal() {
+                const sodaOptions = [
+                    { name: 'Coca-Cola 2 Litros', price: 20, badge: '2 Litros', code: 'CC2L' },
+                    { name: 'Coca-Cola 2 Litros Zero', price: 20, badge: '2 Litros Zero', code: 'CZ2L' },
+                    { name: 'Coca-Cola Personal', price: 8, badge: 'Personal', code: 'CC' },
+                    { name: 'Coca-Cola Zero Personal', price: 8, badge: 'Personal Zero', code: 'CZ' },
+                    { name: 'Fanta Personal', price: 8, badge: 'Personal Fanta', code: 'FA' },
+                    { name: 'Guaraná Personal', price: 8, badge: 'Personal Guaraná', code: 'GU' },
+                    { name: 'Tropi', price: 15, badge: 'Tropi', code: 'TR' }
+                ];
+
+                let sodaButtonsHtml = '';
+                sodaOptions.forEach((soda, idx) => {
+                    sodaButtonsHtml += `
+                        <button type="button" onclick="app.selectSodaOption(${idx})" id="btn-soda-${idx}" class="soda-opt-btn ${idx===0?'active bg-red-100 border-red-600 text-red-900':'bg-white border-gray-200 text-gray-700'} w-full p-2.5 rounded-xl border-2 font-extrabold text-xs flex justify-between items-center shadow-sm">
+                            <span>${soda.name}</span>
+                            <span class="font-black text-sm">${formatMoney(soda.price)}</span>
+                        </button>
+                    `;
+                });
+
+                const html = `
+                    <div class="space-y-3">
+                        <label class="block text-xs font-bold text-gray-600 mb-1">Selecciona la gaseosa (2 Litros primero):</label>
+                        <div class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                            ${sodaButtonsHtml}
+                        </div>
+
+                        <div class="flex justify-center items-center gap-6 py-1">
+                            <button onclick="document.getElementById('add-qty').value = Math.max(1, parseInt(document.getElementById('add-qty').value) - 1)" class="w-12 h-12 rounded-full bg-gray-200 text-xl font-black flex items-center justify-center active:scale-95 text-gray-700">-</button>
+                            <input type="number" id="add-qty" value="1" min="1" class="w-16 text-center text-3xl font-black focus:outline-none bg-transparent">
+                            <button onclick="document.getElementById('add-qty').value = parseInt(document.getElementById('add-qty').value) + 1" class="w-12 h-12 rounded-full bg-blue-600 text-white text-xl font-black flex items-center justify-center active:scale-95">+</button>
+                        </div>
+
+                        <div class="flex items-center justify-between border-t pt-2">
+                            <span class="text-xs font-bold text-gray-600">¿Para Llevar?</span>
+                            <label class="flex items-center gap-1.5 cursor-pointer font-black text-sm text-purple-900 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-200">
+                                <input type="checkbox" id="add-is-takeout" class="w-4 h-4 text-purple-600"> Sí, llevar (LL)
+                            </label>
+                        </div>
+                    </div>
+                `;
+
+                this.selectedSoda = sodaOptions[0];
+                this.sodaOptionsList = sodaOptions;
+
+                this.showModal('Gaseosas y Sodas', html, [
+                    { label: 'Atrás', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.openQuickAddModal() },
+                    { label: 'Añadir al Pedido', class: 'bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-6', onClick: () => {
+                        const qty = parseInt(document.getElementById('add-qty').value) || 1;
+                        const isTakeout = document.getElementById('add-is-takeout').checked;
+                        this.addItemToOrder(this.selectedSoda.name, this.selectedSoda.price, qty, '', isTakeout, this.selectedSoda.code);
+                    }}
+                ]);
+            }
+
+            selectSodaOption(idx) {
+                this.selectedSoda = this.sodaOptionsList[idx];
+                document.querySelectorAll('.soda-opt-btn').forEach(b => b.className = "soda-opt-btn w-full p-2.5 rounded-xl border-2 font-extrabold text-xs flex justify-between items-center shadow-sm bg-white border-gray-200 text-gray-700");
+                const activeBtn = document.getElementById(`btn-soda-${idx}`);
+                if (activeBtn) activeBtn.className = "soda-opt-btn active w-full p-2.5 rounded-xl border-2 font-extrabold text-xs flex justify-between items-center shadow-sm bg-red-100 border-red-600 text-red-900";
+            }
+
+            showPicadaVariantModal(fixedSize) {
+                let sizeTitle = fixedSize === 1 ? 'Medio (1 persona) - Bs 40.00' : 'Entero (2 personas) - Bs 70.00';
+                
+                const html = `
+                    <div class="space-y-4">
+                        <div class="bg-blue-50 p-2.5 rounded-xl border border-blue-200 font-extrabold text-xs text-blue-900 text-center">
+                            📏 Tamaño: ${sizeTitle}
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-2">Selecciona el tipo:</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button type="button" onclick="app.selectPicadaType('Carne')" id="btn-type-Carne" class="picada-type-btn active p-3 rounded-xl border-2 font-black text-sm bg-blue-100 border-blue-600 text-blue-900 shadow-sm">Carne</button>
+                                <button type="button" onclick="app.selectPicadaType('Pollo')" id="btn-type-Pollo" class="picada-type-btn p-3 rounded-xl border-2 font-black text-sm bg-white border-gray-200 text-gray-700 shadow-sm">Pollo</button>
+                                <button type="button" onclick="app.selectPicadaType('Mixta')" id="btn-type-Mixta" class="picada-type-btn p-3 rounded-xl border-2 font-black text-sm bg-white border-gray-200 text-gray-700 shadow-sm">Mixta</button>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-center items-center gap-6 py-1">
+                            <button onclick="document.getElementById('add-qty').value = Math.max(1, parseInt(document.getElementById('add-qty').value) - 1)" class="w-12 h-12 rounded-full bg-gray-200 text-xl font-black flex items-center justify-center active:scale-95 text-gray-700">-</button>
+                            <input type="number" id="add-qty" value="1" min="1" class="w-16 text-center text-3xl font-black focus:outline-none bg-transparent">
+                            <button onclick="document.getElementById('add-qty').value = parseInt(document.getElementById('add-qty').value) + 1" class="w-12 h-12 rounded-full bg-blue-600 text-white text-xl font-black flex items-center justify-center active:scale-95">+</button>
+                        </div>
+
+                        <div class="flex items-center justify-between border-t pt-3">
+                            <span class="text-xs font-bold text-gray-600">¿Para Llevar?</span>
+                            <label class="flex items-center gap-1.5 cursor-pointer font-black text-sm text-purple-900 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-200">
+                                <input type="checkbox" id="add-is-takeout" class="w-4 h-4 text-purple-600"> Sí, llevar (LL)
+                            </label>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">Observaciones Extras</label>
+                            <input type="text" id="add-note" placeholder="Ej: Sin cebolla, extra mayonesa..." class="w-full border-2 rounded-xl p-3 bg-gray-50 text-sm font-semibold focus:border-blue-500 outline-none">
+                        </div>
+                    </div>
+                `;
+
+                this.selectedPicada = { size: fixedSize, price: fixedSize === 1 ? 40 : 70, type: 'Carne' };
+
+                this.showModal(`Milanesa Picada (${fixedSize === 1 ? '1 pers' : '2 pers'})`, html, [
+                    { label: 'Atrás', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.openQuickAddModal() },
+                    { label: 'Añadir al Pedido', class: 'bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-6', onClick: () => {
+                        const fullName = `Milanesa Picada ${this.selectedPicada.type} (${this.selectedPicada.size} pers)`;
+                        const qty = parseInt(document.getElementById('add-qty').value) || 1;
+                        const isTakeout = document.getElementById('add-is-takeout').checked;
+                        const note = document.getElementById('add-note').value;
+                        const code = CODE_MAP[fullName] || '';
+                        this.addItemToOrder(fullName, this.selectedPicada.price, qty, note, isTakeout, code);
+                    }}
+                ]);
+            }
+
+            selectPicadaType(type) {
+                this.selectedPicada.type = type;
+                document.querySelectorAll('.picada-type-btn').forEach(b => b.className = "picada-type-btn p-3 rounded-xl border-2 font-black text-sm bg-white border-gray-200 text-gray-700 shadow-sm");
+                const activeBtn = document.getElementById(`btn-type-${type}`);
+                if (activeBtn) activeBtn.className = "picada-type-btn active p-3 rounded-xl border-2 font-black text-sm bg-blue-100 border-blue-600 text-blue-900 shadow-sm";
+            }
+
+            // CORRECCIÓN #1: PROCESAMIENTO LIMPIO DE MILANESAS SIN ERRORES DE GUARDADO
+            showSimpleVariantModal(title, price) {
+                const guideText = title === 'Napolitana' ? '🧀 Guía: Lleva Salsa Blanca' : '🍅 Guía: Lleva Salsa Roja';
+                
+                const html = `
+                    <div class="space-y-4">
+                        <div class="bg-amber-50 text-amber-900 p-2.5 rounded-xl border border-amber-200 text-xs font-black flex items-center justify-center gap-2">
+                            ${guideText}
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-2">Selecciona la proteína:</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button type="button" onclick="app.selectSimpleType('Carne')" id="btn-stype-Carne" class="simple-type-btn active bg-blue-100 border-blue-600 text-blue-900 p-3 rounded-xl border-2 font-black text-sm shadow-sm flex flex-col items-center">
+                                    <span>Carne</span>
+                                </button>
+                                <button type="button" onclick="app.selectSimpleType('Pollo')" id="btn-stype-Pollo" class="simple-type-btn bg-white border-gray-200 text-gray-700 p-3 rounded-xl border-2 font-black text-sm shadow-sm flex flex-col items-center">
+                                    <span>Pollo</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-center items-center gap-6 py-1">
+                            <button onclick="document.getElementById('add-qty').value = Math.max(1, parseInt(document.getElementById('add-qty').value) - 1)" class="w-12 h-12 rounded-full bg-gray-200 text-xl font-black flex items-center justify-center active:scale-95 text-gray-700">-</button>
+                            <input type="number" id="add-qty" value="1" min="1" class="w-16 text-center text-3xl font-black focus:outline-none bg-transparent">
+                            <button onclick="document.getElementById('add-qty').value = parseInt(document.getElementById('add-qty').value) + 1" class="w-12 h-12 rounded-full bg-blue-600 text-white text-xl font-black flex items-center justify-center active:scale-95">+</button>
+                        </div>
+                        
+                        <div class="flex items-center justify-between border-t pt-3">
+                            <span class="text-xs font-bold text-gray-600">¿Para Llevar?</span>
+                            <label class="flex items-center gap-1.5 cursor-pointer font-black text-sm text-purple-900 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-200">
+                                <input type="checkbox" id="add-is-takeout" class="w-4 h-4 text-purple-600"> Sí, llevar (LL)
+                            </label>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">Observaciones Extras</label>
+                            <input type="text" id="add-note" placeholder="Ej: Sin cebolla..." class="w-full border-2 rounded-xl p-3 bg-gray-50 text-sm font-semibold focus:border-blue-500 outline-none">
+                        </div>
+                    </div>
+                `;
+
+                this.selectedSimpleType = 'Carne';
+
+                this.showModal(`Milanesa ${title}`, html, [
+                    { label: 'Atrás', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.openQuickAddModal() },
+                    { label: 'Añadir al Pedido', class: 'bg-blue-600 hover:bg-blue-700 text-white font-black px-6', onClick: () => {
+                        const fullName = `${title} ${this.selectedSimpleType}`;
+                        const qty = parseInt(document.getElementById('add-qty').value) || 1;
+                        const isTakeout = document.getElementById('add-is-takeout').checked;
+                        const note = document.getElementById('add-note').value;
+                        const code = CODE_MAP[fullName] || '';
+                        this.addItemToOrder(fullName, price, qty, note, isTakeout, code);
+                    }}
+                ]);
+            }
+
+            selectSimpleType(type) {
+                this.selectedSimpleType = type;
+                document.querySelectorAll('.simple-type-btn').forEach(b => b.className = "simple-type-btn bg-white border-gray-200 text-gray-700 p-3 rounded-xl border-2 font-black text-sm shadow-sm flex flex-col items-center");
+                const activeBtn = document.getElementById(`btn-stype-${type}`);
+                if (activeBtn) activeBtn.className = "simple-type-btn active bg-blue-100 border-blue-600 text-blue-900 p-3 rounded-xl border-2 font-black text-sm shadow-sm flex flex-col items-center";
+            }
+
+            showCitricModal(flavor) {
+                const html = `
+                    <div class="space-y-4">
+                        <div class="bg-blue-50 p-2.5 rounded-xl border border-blue-200 font-extrabold text-sm text-blue-900 text-center flex items-center justify-center gap-2">
+                            <span>🍹 Sabor:</span> <span class="font-black text-blue-700 underline uppercase">${flavor}</span>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-2">Selecciona la presentación:</label>
+                            <div class="space-y-2">
+                                <button type="button" onclick="app.selectCitricSize('en vaso', 5)" id="btn-csize-vaso" class="cit-size-btn active w-full p-3 rounded-xl border-2 font-bold text-sm bg-blue-100 border-blue-600 text-blue-900 flex justify-between items-center shadow-sm">
+                                    <span>🥤 Vaso</span> <span class="font-black text-base">Bs 5.00</span>
+                                </button>
+                                <button type="button" onclick="app.selectCitricSize('en jarra chica', 10)" id="btn-csize-chica" class="cit-size-btn w-full p-3 rounded-xl border-2 font-bold text-sm bg-white border-gray-200 text-gray-700 flex justify-between items-center shadow-sm">
+                                    <span>🫖 Jarra Chica</span> <span class="font-black text-base">Bs 10.00</span>
+                                </button>
+                                <button type="button" onclick="app.selectCitricSize('en jarra grande', 15)" id="btn-csize-grande" class="cit-size-btn w-full p-3 rounded-xl border-2 font-bold text-sm bg-white border-gray-200 text-gray-700 flex justify-between items-center shadow-sm">
+                                    <span>🏺 Jarra Grande</span> <span class="font-black text-base">Bs 15.00</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-center items-center gap-6 py-1">
+                            <button onclick="document.getElementById('add-qty').value = Math.max(1, parseInt(document.getElementById('add-qty').value) - 1)" class="w-12 h-12 rounded-full bg-gray-200 text-xl font-black flex items-center justify-center active:scale-95 text-gray-700">-</button>
+                            <input type="number" id="add-qty" value="1" min="1" class="w-16 text-center text-3xl font-black focus:outline-none bg-transparent">
+                            <button onclick="document.getElementById('add-qty').value = parseInt(document.getElementById('add-qty').value) + 1" class="w-12 h-12 rounded-full bg-blue-600 text-white text-xl font-black flex items-center justify-center active:scale-95">+</button>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2 border-t pt-3">
+                            <label class="flex flex-col items-center justify-center gap-1 cursor-pointer font-black text-[10px] text-blue-900 bg-blue-50 p-2 rounded-xl border border-blue-200 text-center uppercase tracking-wide hover:bg-blue-100">
+                                <input type="checkbox" id="add-no-sugar" class="w-4 h-4 text-blue-600 mb-0.5"> Sin azúcar (-SA)
+                            </label>
+                            <label class="flex flex-col items-center justify-center gap-1 cursor-pointer font-black text-[10px] text-cyan-900 bg-cyan-50 p-2 rounded-xl border border-cyan-200 text-center uppercase tracking-wide hover:bg-cyan-100">
+                                <input type="checkbox" id="add-no-ice" class="w-4 h-4 text-cyan-600 mb-0.5"> Sin hielo (-SH)
+                            </label>
+                            <label class="flex flex-col items-center justify-center gap-1 cursor-pointer font-black text-[10px] text-purple-900 bg-purple-50 p-2 rounded-xl border border-purple-200 text-center uppercase tracking-wide hover:bg-purple-100">
+                                <input type="checkbox" id="add-is-takeout" class="w-4 h-4 text-purple-600 mb-0.5"> Para llevar (LL)
+                            </label>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">Otras Observaciones</label>
+                            <input type="text" id="add-note" placeholder="Ej: Vaso extra, con cañita..." class="w-full border-2 rounded-xl p-3 bg-gray-50 text-sm font-semibold focus:border-blue-500 outline-none">
+                        </div>
+                    </div>
+                `;
+
+                this.selectedCitric = { flavor: flavor, sizeStr: 'en vaso', price: 5 };
+
+                this.showModal(`Opciones de ${flavor}`, html, [
+                    { label: 'Atrás', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.openQuickAddModal() },
+                    { label: 'Añadir al Pedido', class: 'bg-blue-600 hover:bg-blue-700 text-white font-black px-6', onClick: () => {
+                        const fullName = `${this.selectedCitric.flavor} ${this.selectedCitric.sizeStr}`;
+                        const qty = parseInt(document.getElementById('add-qty').value) || 1;
+                        const noSugar = document.getElementById('add-no-sugar').checked;
+                        const noIce = document.getElementById('add-no-ice').checked;
+                        const isTakeout = document.getElementById('add-is-takeout').checked;
+                        let customNote = document.getElementById('add-note').value;
+                        
+                        let noteParts = [];
+                        if (noSugar) noteParts.push('SIN AZÚCAR');
+                        if (noIce) noteParts.push('SIN HIELO');
+                        if (customNote) noteParts.push(customNote);
+                        
+                        const finalNote = noteParts.join(', ');
+                        const code = CODE_MAP[fullName] || '';
+                        
+                        this.addItemToOrder(fullName, this.selectedCitric.price, qty, finalNote, isTakeout, code);
+                    }}
+                ]);
+            }
+
+            selectCitricSize(sizeStr, price) {
+                this.selectedCitric.sizeStr = sizeStr;
+                this.selectedCitric.price = price;
+                document.querySelectorAll('.cit-size-btn').forEach(b => b.className = "cit-size-btn w-full p-3 rounded-xl border-2 font-bold text-sm bg-white border-gray-200 text-gray-700 flex justify-between items-center shadow-sm");
+                let btnId = 'btn-csize-vaso';
+                if (sizeStr.includes('chica')) btnId = 'btn-csize-chica';
+                if (sizeStr.includes('grande')) btnId = 'btn-csize-grande';
+                const activeBtn = document.getElementById(btnId);
+                if (activeBtn) activeBtn.className = "cit-size-btn active w-full p-3 rounded-xl border-2 font-bold text-sm bg-blue-100 border-blue-600 text-blue-900 flex justify-between items-center shadow-sm";
+            }
+
+            showDirectAddModal(name, price, code = '') {
+                const html = `
+                    <div class="space-y-4">
+                        <div class="text-center bg-gray-50 p-4 rounded-2xl border shadow-inner">
+                            <h3 class="font-extrabold text-lg text-gray-800 leading-tight mb-1">${name}</h3>
+                            <p class="text-base font-black text-blue-700">${formatMoney(price)}</p>
+                        </div>
+
+                        <div class="flex justify-center items-center gap-6 py-2">
+                            <button onclick="document.getElementById('add-qty').value = Math.max(1, parseInt(document.getElementById('add-qty').value) - 1)" class="w-14 h-14 rounded-full bg-gray-200 hover:bg-gray-300 text-2xl font-black flex items-center justify-center active:scale-95 text-gray-700">-</button>
+                            <input type="number" id="add-qty" value="1" min="1" class="w-20 text-center text-4xl font-black focus:outline-none bg-transparent">
+                            <button onclick="document.getElementById('add-qty').value = parseInt(document.getElementById('add-qty').value) + 1" class="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-2xl font-black flex items-center justify-center active:scale-95">+</button>
+                        </div>
+
+                        <div class="flex items-center justify-between border-t pt-3">
+                            <span class="text-xs font-bold text-gray-600">¿Para Llevar?</span>
+                            <label class="flex items-center gap-1.5 cursor-pointer font-black text-sm text-purple-900 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-200">
+                                <input type="checkbox" id="add-is-takeout" class="w-4 h-4 text-purple-600"> Sí, llevar (LL)
+                            </label>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">Observaciones (Opcional)</label>
+                            <input type="text" id="add-note" placeholder="Ej: Sin cebolla, extra salsa..." class="w-full border-2 rounded-xl p-3 bg-gray-50 text-sm font-semibold focus:border-blue-500 outline-none">
+                        </div>
+                    </div>
+                `;
+
+                this.showModal('Detalle del Pedido', html, [
+                    { label: 'Atrás', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.openQuickAddModal() },
+                    { label: 'Añadir al Pedido', class: 'bg-blue-600 hover:bg-blue-700 text-white font-black px-6', onClick: () => {
+                        const qty = parseInt(document.getElementById('add-qty').value) || 1;
+                        const isTakeout = document.getElementById('add-is-takeout').checked;
+                        const note = document.getElementById('add-note').value;
+                        this.addItemToOrder(name, price, qty, note, isTakeout, code);
+                    }}
+                ]);
+            }
+
+            async addItemToOrder(name, price, qty, note, isTakeout, code = '') {
+                if (this.isAddingItem) return;
+                this.isAddingItem = true;
+
+                try {
+                    const item = {
+                        id: generateId(),
+                        orderId: this.activeOrder.id,
+                        nameSnapshot: String(name),
+                        priceSnapshot: Number(price) || 0,
+                        quantity: Number(qty) || 1,
+                        note: String(note || ''),
+                        isTakeout: Boolean(isTakeout || this.activeOrder.destination === 'takeout'),
+                        code: String(code || CODE_MAP[name] || ''),
+                        timestamp: Date.now()
+                    };
+
+                    await this.fbSave(`orderItems/${item.id}`, item);
+
+                    if (this.activeOrder.prepStatus === 'delivered' || this.activeOrder.prepStatus === 'ready') {
+                        this.activeOrder.prepStatus = 'pending';
+                        await this.fbSave(`orders/${this.activeOrder.id}/prepStatus`, 'pending');
+                    }
+
+                    this.closeModal();
+                    this.updatePrepStatusButtonsUI(this.activeOrder.prepStatus);
+                    this.showToast(`Agregado: ${qty}x ${name}`);
+                    
+                    setTimeout(() => this.openQuickAddModal(), 300);
+
+                } catch (e) {
+                    console.error("Error al guardar ítem:", e);
+                    this.showAlert("No se pudo guardar el producto. Intenta nuevamente.");
+                } finally {
+                    this.isAddingItem = false;
+                }
+            }
+
+            generateTicket() {
+                const items = this.cachedOrderItems.filter(i => i.orderId === this.activeOrder.id);
+                if (items.length === 0) {
+                    this.showAlert("La cuenta no tiene productos para generar el ticket.");
+                    return;
+                }
+
+                let headerLine = `PEDIDO #${this.activeOrder.orderNumber || '--'}\nMESA ${this.activeOrder.tableNumber || ''}`;
+                if (this.activeOrder.destination === 'takeout') headerLine = `PEDIDO #${this.activeOrder.orderNumber || '--'}\nPARA LLEVAR ${this.activeOrder.customerName ? '(' + this.activeOrder.customerName + ')' : ''}`;
+                if (this.activeOrder.destination === 'pending') headerLine = `PEDIDO #${this.activeOrder.orderNumber || '--'}\nPENDIENTE ASIGNAR ${this.activeOrder.customerName ? '(' + this.activeOrder.customerName + ')' : ''}`;
+
+                if (this.activeOrder.generalNote) {
+                    headerLine += `\nNOTA: ${this.activeOrder.generalNote}`;
+                }
+
+                const dineInItems = items.filter(i => !i.isTakeout);
+                const takeoutItems = items.filter(i => i.isTakeout);
+
+                const formatItemLine = (item) => {
+                    let code = item.code || CODE_MAP[item.nameSnapshot] || item.nameSnapshot;
+                    
+                    let line = '';
+                    if (code.startsWith('½') || code.startsWith('1M')) {
+                        line = item.quantity > 1 ? `${item.quantity} ${code}` : `${code}`;
+                    } else {
+                        line = item.quantity > 1 ? `${item.quantity}${code}` : `${code}`;
+                    }
+
+                    let modifiers = [];
+                    if (item.note) {
+                        let lower = item.note.toLowerCase();
+                        if (lower.includes('sin azúcar') || lower.includes('sin azucar')) { modifiers.push('SA'); lower = lower.replace(/sin az[úu]car/ig, ''); }
+                        if (lower.includes('sin hielo')) { modifiers.push('SH'); lower = lower.replace(/sin hielo/ig, ''); }
+                        if (lower.includes('sin salsa roja')) { modifiers.push('SSR'); lower = lower.replace(/sin salsa roja/ig, ''); }
+                        if (lower.includes('sin salsa blanca')) { modifiers.push('SSB'); lower = lower.replace(/sin salsa blanca/ig, ''); }
+                        
+                        const remainingNote = lower.trim().replace(/^,\s*|,\s*$/g, '');
+                        if (remainingNote) modifiers.push(remainingNote);
+                    }
+
+                    if (modifiers.length > 0) line += `-${modifiers.join('-')}`;
+                    return line;
+                };
+
+                let ticketText = `${headerLine}\n`;
+                
+                if (dineInItems.length > 0) {
+                    dineInItems.forEach(i => ticketText += `${formatItemLine(i)}\n`);
+                }
+
+                if (takeoutItems.length > 0) {
+                    if (dineInItems.length > 0) ticketText += `\nPara llevar:\n`;
+                    takeoutItems.forEach(i => {
+                        let l = formatItemLine(i);
+                        if (!l.includes('LL')) l += '-LL';
+                        ticketText += `${l}\n`;
+                    });
+                }
+
+                ticketText = ticketText.trim();
+
+                const html = `
+                    <div class="space-y-4">
+                        <div class="bg-gray-900 text-green-400 p-4 rounded-2xl font-mono text-sm leading-relaxed whitespace-pre-wrap select-all shadow-inner border-2 border-gray-800">
+${ticketText}
+                        </div>
+                    </div>
+                `;
+
+                this.showModal('🎟️ Vista Previa del Ticket', html, [
+                    { label: 'Volver', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300 px-5', onClick: () => this.closeModal() },
+                    { label: '📋 Copiar Ticket', class: 'bg-purple-600 hover:bg-purple-700 text-white font-black px-5', onClick: () => this.copyTicketToClipboard(ticketText) }
+                ]);
+            }
+
+            async copyTicketToClipboard(text) {
+                try {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(text);
+                    } else {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = text;
+                        textArea.style.position = "fixed";
+                        textArea.style.left = "-999999px";
+                        textArea.style.top = "-999999px";
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+                        document.execCommand('copy');
+                        textArea.remove();
+                    }
+                    this.showToast("¡Ticket copiado con éxito!");
+                } catch (err) {
+                    console.error("Error al copiar:", err);
+                    this.showAlert("No se pudo copiar automáticamente. Puedes seleccionar el texto dentro de la caja negra y copiarlo manualmente.");
+                }
+            }
+
+            openChangeDestinationModal() {
+                const occupiedTables = this.getOccupiedTables();
+
+                let tableOptionsHtml = '';
+                for (let i = 1; i <= this.settings.tableCount; i++) {
+                    const isOccupied = occupiedTables.includes(i);
+                    tableOptionsHtml += `
+                        <button onclick="app.changeOrderDestination('dine_in', ${i})" ${isOccupied ? 'disabled' : ''} 
+                                class="p-2.5 rounded-xl border-2 font-bold text-xs ${isOccupied ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-green-50 text-green-900 border-green-300 hover:bg-green-100 active:bg-green-200'}">
+                            Mesa ${i}
+                        </button>
+                    `;
+                }
+
+                const html = `
+                    <div class="space-y-3">
+                        <p class="text-xs font-bold text-gray-600">Cambiar destino de la cuenta actual:</p>
+                        
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="app.changeOrderDestination('takeout')" class="p-3 bg-purple-100 hover:bg-purple-200 border border-purple-300 text-purple-900 rounded-xl font-black text-xs active:scale-95 flex flex-col items-center">
+                                <i class="fa-solid fa-bag-shopping text-lg mb-1"></i> Para Llevar
+                            </button>
+                            <button onclick="app.changeOrderDestination('pending')" class="p-3 bg-yellow-100 hover:bg-yellow-200 border border-yellow-300 text-yellow-900 rounded-xl font-black text-xs active:scale-95 flex flex-col items-center">
+                                <i class="fa-solid fa-hourglass-half text-lg mb-1"></i> Pendiente
+                            </button>
+                        </div>
+
+                        <div class="border-t pt-3">
+                            <p class="text-xs font-bold text-gray-600 mb-2">O reasignar a Mesa libre:</p>
+                            <div class="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1">
+                                ${tableOptionsHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                this.showModal('Cambiar Destino', html, [
+                    { label: 'Cancelar', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.closeModal() }
+                ]);
+            }
+
+            async changeOrderDestination(newDest, tableNumber = null) {
+                this.activeOrder.destination = newDest;
+                this.activeOrder.tableNumber = tableNumber;
+                await this.fbSave(`orders/${this.activeOrder.id}`, this.activeOrder);
+                this.closeModal();
+                this.openOrder(this.activeOrder);
+                this.showToast("Destino actualizado.");
+            }
+
+            openPaymentModal() {
+                if (this.activeOrder.total === 0) {
+                    this.showAlert("La cuenta no tiene monto por cobrar.");
+                    return;
+                }
+
+                const balance = this.activeOrder.total - this.activeOrder.paid;
+                if (balance <= 0) {
+                    this.showAlert("Esta cuenta se encuentra totalmente pagada.");
+                    return;
+                }
+
+                const html = `
+                    <div class="bg-gray-100 p-4 rounded-2xl text-center mb-4 border">
+                        <p class="text-xs text-gray-500 font-bold mb-0.5">Saldo Pendiente a Cobrar</p>
+                        <p class="text-3xl md:text-4xl font-black text-gray-900">${formatMoney(balance)}</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-xs font-bold text-gray-600 mb-1.5">Monto Recibido (Bs)</label>
+                        <input type="number" id="pay-amount" value="${balance.toFixed(2)}" step="0.5" class="w-full border-2 rounded-xl p-3 text-2xl font-black bg-white focus:outline-none focus:border-green-600">
+                    </div>
+
+                    <label class="block text-xs font-bold text-gray-600 mb-1.5">Método de Pago</label>
+                    <div class="grid grid-cols-2 gap-2 mb-4" id="pay-methods">
+                        <button type="button" class="pay-method-btn active bg-green-100 border-2 border-green-500 text-green-900 py-3 rounded-xl font-bold text-sm flex flex-col items-center" data-method="Efectivo" onclick="app.selectPayMethod(this)">
+                            <i class="fa-solid fa-money-bill text-xl mb-1"></i> Efectivo
+                        </button>
+                        <button type="button" class="pay-method-btn bg-white border-2 border-gray-200 text-gray-600 py-3 rounded-xl font-bold text-sm flex flex-col items-center" data-method="QR" onclick="app.selectPayMethod(this)">
+                            <i class="fa-solid fa-qrcode text-xl mb-1"></i> Pago QR
+                        </button>
+                        <button type="button" class="pay-method-btn bg-white border-2 border-gray-200 text-gray-600 py-3 rounded-xl font-bold text-sm flex flex-col items-center" data-method="Tarjeta" onclick="app.selectPayMethod(this)">
+                            <i class="fa-solid fa-credit-card text-xl mb-1"></i> Tarjeta
+                        </button>
+                        <button type="button" class="pay-method-btn bg-white border-2 border-gray-200 text-gray-600 py-3 rounded-xl font-bold text-sm flex flex-col items-center" data-method="Otro" onclick="app.selectPayMethod(this)">
+                            <i class="fa-solid fa-ellipsis text-xl mb-1"></i> Otro
+                        </button>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">Descripción / Nota (Opcional)</label>
+                        <input type="text" id="pay-desc" placeholder="Ej: Pago Juan..." class="w-full border-2 rounded-xl p-2.5 bg-gray-50 text-sm font-semibold">
+                    </div>
+                `;
+
+                this.showModal('Registrar Pago', html, [
+                    { label: 'Cancelar', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.closeModal() },
+                    { label: 'Confirmar Cobro', class: 'bg-green-600 hover:bg-green-700 text-white font-black px-6', onClick: () => this.processPayment(balance) }
+                ]);
+            }
+
+            selectPayMethod(btn) {
+                document.querySelectorAll('.pay-method-btn').forEach(b => {
+                    b.classList.remove('bg-green-100', 'border-green-500', 'text-green-900', 'active');
+                    b.classList.add('bg-white', 'border-gray-200', 'text-gray-600');
+                });
+                btn.classList.remove('bg-white', 'border-gray-200', 'text-gray-600');
+                btn.classList.add('bg-green-100', 'border-green-500', 'text-green-900', 'active');
+            }
+
+            async processPayment(maxBalance) {
+                const amount = parseFloat(document.getElementById('pay-amount').value);
+                const desc = document.getElementById('pay-desc').value;
+                const activeBtn = document.querySelector('.pay-method-btn.active');
+                const method = activeBtn ? activeBtn.dataset.method : 'Efectivo';
+
+                if (isNaN(amount) || amount <= 0) { alert("Ingresa un monto válido."); return; }
+
+                if (amount > maxBalance + 0.01) {
+                    this.showConfirm(`El monto ingresado es mayor al saldo pendiente. ¿Registrar pago exacto del saldo (${formatMoney(maxBalance)})?`, async () => {
+                        await this.savePaymentRecord(maxBalance, method, desc);
+                    });
+                    return;
+                }
+
+                await this.savePaymentRecord(amount, method, desc);
+            }
+
+            async savePaymentRecord(amount, method, desc) {
+                const payment = {
+                    id: generateId(),
+                    orderId: this.activeOrder.id,
+                    amount: amount,
+                    method: method,
+                    description: desc,
+                    timestamp: Date.now()
+                };
+
+                await this.fbSave(`payments/${payment.id}`, payment);
+                this.closeModal();
+                this.showToast("Pago registrado con éxito.");
+
+                const remaining = this.activeOrder.total - this.activeOrder.paid - amount;
+                if (remaining <= 0.01) {
+                    this.showConfirm("Cuenta totalmente pagada. ¿Cerrar y liberar mesa/pedido?", () => {
+                        this.closeTableAction(true);
+                    });
+                }
+            }
+
+            // CORRECCIÓN #8: Cierre seguro sin errores de 'Mesa undefined' para pedidos sin mesa
+            async closeTableAction(bypassCheck = false) {
+                if (this.activeOrder.total === 0) {
+                    await this.fbDelete(`orders/${this.activeOrder.id}`);
+                    this.switchView('view-mesas');
+                    return;
+                }
+
+                const balance = this.activeOrder.total - this.activeOrder.paid;
+                if (balance > 0.01 && !bypassCheck) {
+                    this.showConfirm(`Existe un saldo pendiente por cobrar de ${formatMoney(balance)}. ¿Cerrar administrativamente el pedido?`, async () => {
+                         this.finalizeOrderClose();
+                    });
+                    return;
+                }
+
+                this.finalizeOrderClose();
+            }
+
+            async finalizeOrderClose() {
+                if (!this.activeOrder) return;
+                this.activeOrder.status = 'closed';
+                this.activeOrder.closedAt = Date.now();
+                await this.fbSave(`orders/${this.activeOrder.id}`, this.activeOrder);
+
+                this.showToast("Pedido finalizado y cerrado.");
+                this.activeOrder = null;
+                // CORRECCIÓN DEL VIDEO: Redirigir a "Mesas" al cerrar pedido
+                this.switchView('view-mesas');
+            }
+
+            setKitchenFilter(filter) {
+                this.kitchenFilter = filter;
+                document.querySelectorAll('.kds-filter-btn').forEach(btn => {
+                    if (btn.dataset.filter === filter) {
+                        btn.className = "kds-filter-btn active bg-gray-800 text-white px-4 py-2.5 rounded-xl shadow-sm whitespace-nowrap";
+                    } else {
+                        btn.className = "kds-filter-btn bg-white text-gray-700 border px-4 py-2.5 rounded-xl whitespace-nowrap hover:bg-gray-100";
+                    }
+                });
+                this.renderKitchen();
+            }
+
+            // MEJORA #10: VISTA DE COCINA MEJORADA CON NÚMERO GRANDE Y COMENTARIO GENERAL
+            renderKitchen() {
+                const container = document.getElementById('kitchen-container');
+                container.innerHTML = '';
+
+                let activeOrders = this.cachedOrders.filter(o => !o.isTest && o.status !== 'cancelled' && o.prepStatus !== 'delivered' && o.total > 0);
+                
+                activeOrders.sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+                if (this.kitchenFilter !== 'all') {
+                    activeOrders = activeOrders.filter(o => o.prepStatus === this.kitchenFilter);
+                }
+
+                // CORRECCIÓN DEL VIDEO: Mostrar tarjeta en cocina incluso sin ítems, solo si hay nota general
+                activeOrders = activeOrders.filter(order => {
+                    const items = this.cachedOrderItems.filter(i => i.orderId === order.id);
+                    return items.length > 0 || order.generalNote; 
+                });
+
+                if (activeOrders.length === 0) {
+                    container.innerHTML = `<div class="col-span-full text-center py-12 text-gray-400 font-bold"><i class="fa-solid fa-mug-hot text-5xl mb-3"></i><p>No hay pedidos pendientes en cocina.</p></div>`;
+                    return;
+                }
+
+                for (let order of activeOrders) {
+                    const items = this.cachedOrderItems.filter(i => i.orderId === order.id).sort((a,b) => a.timestamp - b.timestamp);
+
+                    let bgClass = "bg-yellow-50 border-yellow-400 shadow-md";
+                    let badgeLabel = "⏳ NUEVO";
+                    if (order.prepStatus === 'preparing') { bgClass = "bg-blue-50 border-blue-400 shadow-lg"; badgeLabel = "🍳 EN PREPARACIÓN"; }
+                    if (order.prepStatus === 'ready') { bgClass = "bg-green-50 border-green-500 shadow-xl"; badgeLabel = "✅ ¡LISTO!"; }
+
+                    let titleHeader = order.destination === 'dine_in' ? `MESA ${order.tableNumber}` : `🛍️ PARA LLEVAR`;
+                    if (order.destination === 'pending') titleHeader = `⏳ PENDIENTE`;
+                    if (order.customerName) titleHeader += ` (${order.customerName})`;
+                    
+                    let orderNumLarge = order.orderNumber ? `#${order.orderNumber}` : '#--';
+
+                    let itemsHtml = '';
+                    let commentsBoxHtml = '';
+
+                    items.forEach(i => {
+                        let noteHtml = '';
+                        if (i.note) {
+                            let processedNote = i.note.toUpperCase();
+                            const importantKeywords = ['SIN AZÚCAR', 'SIN HIELO', 'SIN CEBOLLA', 'SIN SALSA ROJA', 'SIN SALSA BLANCA'];
+                            importantKeywords.forEach(kw => {
+                                if(processedNote.includes(kw)) {
+                                    noteHtml += `<span class="bg-red-600 text-white px-2 py-0.5 rounded text-[10px] font-black mr-1 shadow-sm">${kw}</span>`;
+                                    processedNote = processedNote.replace(kw, '').replace(/,\s*,/g, ',').trim();
+                                }
+                            });
+                            processedNote = processedNote.replace(/^,\s*|,\s*$/g, '');
+                            if (processedNote) {
+                                noteHtml += `<span class="text-xs font-black text-amber-800 block mt-1 bg-amber-100 p-1 rounded-md border border-amber-200"><i class="fa-solid fa-comment-dots mr-1 text-amber-600"></i>${processedNote}</span>`;
+                            }
+                        }
+
+                        let takeoutHtml = i.isTakeout ? `<span class="bg-purple-700 text-white px-1.5 py-0.5 rounded text-[9px] font-black ml-1">LLEVAR</span>` : '';
+
+                        itemsHtml += `
+                            <div class="border-b border-black/10 pb-2 mb-2 last:border-0 last:mb-0 last:pb-0">
+                                <div class="font-extrabold text-base md:text-lg leading-tight flex items-center justify-between">
+                                    <span><span class="font-black text-xl text-blue-900 mr-2">${i.quantity}x</span>${i.nameSnapshot}</span> ${takeoutHtml}
+                                </div>
+                                ${noteHtml}
+                            </div>
+                        `;
+                    });
+
+                    // Comentario general de la orden completa
+                    if (order.generalNote) {
+                        commentsBoxHtml = `
+                            <div class="bg-yellow-100 border-2 border-yellow-300 rounded-2xl p-2.5 mb-3">
+                                <span class="text-[10px] font-black uppercase text-yellow-900 block mb-1 tracking-wider"><i class="fa-solid fa-note-sticky mr-1"></i> Comentario General de la Orden:</span>
+                                <p class="text-xs font-black text-yellow-950">${order.generalNote}</p>
+                            </div>
+                        `;
+                    }
+
+                    let actionsHtml = '';
+                    if (order.prepStatus === 'pending') {
+                        actionsHtml = `<button onclick="app.updateKitchenStatus('${order.id}', 'preparing')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-xl text-sm shadow active:scale-95 transition-colors">🍳 Empezar a Preparar</button>`;
+                    } else if (order.prepStatus === 'preparing') {
+                        actionsHtml = `<button onclick="app.updateKitchenStatus('${order.id}', 'ready')" class="w-full bg-green-600 hover:bg-green-700 text-white font-black py-3 rounded-xl text-sm shadow active:scale-95 transition-colors">✅ Marcar como Listo</button>`;
+                    } else if (order.prepStatus === 'ready') {
+                        actionsHtml = `<button onclick="app.updateKitchenStatus('${order.id}', 'delivered')" class="w-full bg-gray-800 hover:bg-gray-900 text-white font-black py-3 rounded-xl text-sm shadow active:scale-95 transition-colors">🍽️ Entregado</button>`;
+                    }
+
+                    const card = document.createElement('div');
+                    card.className = `p-4 rounded-3xl border-2 flex flex-col ${bgClass}`;
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start mb-3 border-b border-black/10 pb-2.5">
+                            <div>
+                                <div class="text-3xl font-black text-blue-950 tracking-tight mb-0.5">${orderNumLarge}</div>
+                                <h3 class="font-extrabold text-sm md:text-base text-gray-800">${titleHeader}</h3>
+                                <p class="text-[10px] font-extrabold opacity-75 mt-0.5"><i class="fa-regular fa-clock"></i> Hora: ${formatTime(order.createdAt)}</p>
+                            </div>
+                            <span class="kitchen-badge ${order.prepStatus === 'ready' ? 'bg-green-600 text-white text-xs px-2.5 py-1 animate-pulse' : order.prepStatus === 'preparing' ? 'bg-blue-600 text-white' : 'bg-yellow-500 text-white'}">${badgeLabel}</span>
+                        </div>
+                        
+                        ${commentsBoxHtml}
+
+                        <div class="flex-1 space-y-1 mb-3">
+                            ${itemsHtml}
+                        </div>
+
+                        <div class="mt-auto shrink-0 pt-2 border-t border-black/10">
+                            ${actionsHtml}
+                        </div>
+                    `;
+                    container.appendChild(card);
+                }
+            }
+
+            async updateKitchenStatus(orderId, newStatus) {
+                await this.fbSave(`orders/${orderId}/prepStatus`, newStatus);
+                this.showToast(`Estado de cocina actualizado`);
+            }
+
+            // FUNCIONALIDAD #9: HISTORIAL AGRUPADO POR DÍAS CON REPORTES INDIVIDUALES POR FECHA
+            loadHistory(filter = 'all') {
+                const container = document.getElementById('history-list');
+                container.innerHTML = '<div class="text-center py-12 text-gray-400"><i class="fa-solid fa-spinner fa-spin text-3xl"></i></div>';
+                
+                this.historyData = [...this.cachedOrders];
+                this.historyFilter = filter;
+                this.renderHistoryList();
+            }
+
+            filterHistory() {
+                this.renderHistoryList();
+            }
+
+            renderHistoryList() {
+                const container = document.getElementById('history-list');
+                let orders = [...this.historyData];
+                
+                orders.sort((a,b) => (b.closedAt || b.createdAt) - (a.closedAt || a.createdAt));
+
+                if (this.historyFilter === 'pending') orders = orders.filter(o => o.status === 'pending');
+                if (this.historyFilter === 'closed') orders = orders.filter(o => o.status === 'closed');
+                if (this.historyFilter === 'cancelled') orders = orders.filter(o => o.status === 'cancelled');
+
+                const searchStr = (document.getElementById('history-search') ? document.getElementById('history-search').value.toLowerCase() : '');
+                if (searchStr) {
+                    orders = orders.filter(o => {
+                        let text = `${o.orderNumber || ''} mesa ${o.tableNumber || ''} ${o.customerName || ''}`.toLowerCase();
+                        return text.includes(searchStr);
+                    });
+                }
+
+                container.innerHTML = '';
+
+                if (orders.length === 0) {
+                    container.innerHTML = `<div class="text-center text-gray-400 py-12"><i class="fa-solid fa-receipt text-5xl mb-3"></i><p class="text-xs font-bold">No hay registros que coincidan.</p></div>`;
+                    return;
+                }
+
+                // Las pruebas van a una carpeta propia; las ventas reales se agrupan por fecha.
+                const groupedOrders = {};
+                orders.forEach(o => {
+                    const specialFolder = o.isTest ? 'Pruebas' : null;
+                    if (specialFolder) {
+                        if (!groupedOrders[specialFolder]) groupedOrders[specialFolder] = [];
+                        groupedOrders[specialFolder].push(o);
+                        return;
+                    }
+                    const rawDate = o.createdAt;
+                    const dateObj = rawDate === undefined || rawDate === null || rawDate === '' ? new Date(NaN) : new Date(rawDate);
+                    let dateKey;
+                    if (isNaN(dateObj.getTime())) {
+                        dateKey = 'Sin fecha';
+                    } else {
+                        const yyyy = dateObj.getFullYear();
+                        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+                        const dd = String(dateObj.getDate()).padStart(2, '0');
+                        dateKey = `${yyyy}-${mm}-${dd}`;
+                    }
+                    if(!groupedOrders[dateKey]) groupedOrders[dateKey] = [];
+                    groupedOrders[dateKey].push(o);
+                });
+
+                for (const [dateStr, dateOrders] of Object.entries(groupedOrders)) {
+                    let folderTotalSales = 0;
+                    dateOrders.forEach(o => {
+                        if (o.status !== 'cancelled') folderTotalSales += o.total;
+                    });
+
+                    // CORRECCIÓN DEL VIDEO: Asegurarnos de ordenar los pedidos dentro de la fecha
+                    dateOrders.sort((a,b) => (b.closedAt || b.createdAt) - (a.closedAt || a.createdAt));
+
+                    const folderDiv = document.createElement('div');
+                    folderDiv.className = "mb-4 bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm";
+                    
+                    const safeDateId = `folder-${dateStr.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+                    const isTestsFolder = dateStr === 'Pruebas';
+                    const isNoDateFolder = dateStr === 'Sin fecha';
+                    folderDiv.innerHTML = `
+                        <div class="flex justify-between items-center bg-gray-100 hover:bg-gray-200 cursor-pointer p-4 transition-colors" onclick="document.getElementById('${safeDateId}').classList.toggle('collapsed')">
+                            <div class="flex items-center gap-2.5">
+                                <i class="fa-solid fa-folder-open text-blue-600 text-lg"></i> 
+                                <div>
+                                    <h3 class="font-black text-sm md:text-base text-gray-900">${isTestsFolder ? '🧪 Pruebas' : dateStr}</h3>
+                                    <span class="text-[10px] font-bold text-gray-500">${dateOrders.length} pedido(s)</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-black text-xs md:text-sm text-green-700 bg-green-100 px-3 py-1 rounded-xl border border-green-200">${formatMoney(folderTotalSales)}</span>
+                                ${!isTestsFolder && !isNoDateFolder ? `<button onclick="event.stopPropagation(); app.downloadDailyPDF('${dateStr}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 active:scale-95 transition-transform" title="Descargar Reporte PDF del Día">
+                                    <i class="fa-solid fa-file-pdf"></i> <span class="hidden sm:inline">PDF</span>
+                                </button>` : ''}
+                                <button onclick="event.stopPropagation(); app.deleteHistoryFolder('${dateStr}')" class="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-xl text-xs font-extrabold" title="Eliminar carpeta"><i class="fa-solid fa-trash"></i></button>
+                                <i class="fa-solid fa-chevron-down text-gray-400 ml-1"></i>
+                            </div>
+                        </div>
+                        <div id="${safeDateId}" class="history-folder-content p-3 space-y-2.5 bg-gray-50/50"></div>
+                    `;
+                    const listContainer = folderDiv.querySelector(`#${safeDateId}`);
+
+                    for(let order of dateOrders) {
+                        let badgeClass = "bg-red-100 text-red-800";
+                        let badgeText = "Abierta";
+                        if(order.status === 'pending') { badgeClass = "bg-orange-100 text-orange-800"; badgeText = "Pendiente"; }
+                        if(order.status === 'closed') { badgeClass = "bg-green-100 text-green-800"; badgeText = "Pagada"; }
+                        if(order.status === 'cancelled') { badgeClass = "bg-gray-200 text-gray-500 line-through"; badgeText = "Anulada"; }
+
+                        let orderNum = order.orderNumber ? `<span class="font-black text-gray-900 mr-1">#${order.orderNumber}</span>` : '';
+                        let destTitle = order.destination === 'dine_in' ? `Mesa ${order.tableNumber}` : `🛍️ Llevar ${order.customerName ? '('+order.customerName+')' : ''}`;
+                        if (order.destination === 'pending') destTitle = `⏳ Pdte ${order.customerName ? '('+order.customerName+')' : ''}`;
+
+                        // Obtener método de pago principal si existe
+                        const payments = this.cachedPayments.filter(p => p.orderId === order.id);
+                        let payBadge = '';
+                        if (payments.length > 0) {
+                            const methods = [...new Set(payments.map(p => p.method))].join(', ');
+                            payBadge = `<span class="text-[10px] font-extrabold px-2 py-0.5 bg-blue-50 text-blue-800 rounded border border-blue-200">${methods}</span>`;
+                        }
+
+                        const el = document.createElement('div');
+                        el.className = `bg-white p-3.5 rounded-2xl shadow-sm border hover:border-blue-300 cursor-pointer ${order.status === 'cancelled' ? 'opacity-60' : ''}`;
+                        el.onclick = () => this.showHistoryDetail(order);
+                        el.innerHTML = `
+                            <div class="flex justify-between items-start mb-1">
+                                <div>
+                                    <div class="font-extrabold text-xs md:text-sm text-gray-800">${orderNum} ${destTitle}</div>
+                                    <p class="text-[10px] font-semibold text-gray-400">Hora: ${formatTime(order.createdAt)}</p>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    ${payBadge}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${badgeClass}">${badgeText}</span>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-end border-t pt-2 mt-2">
+                                <span class="text-xs text-gray-500 font-semibold">Total: ${formatMoney(order.total)}</span>
+                                <span class="font-black ${order.status === 'cancelled' ? 'text-gray-500' : 'text-gray-800'} text-xs md:text-sm">${formatMoney(order.paid)} Pagado</span>
+                            </div>
+                        `;
+                        listContainer.appendChild(el);
+                    }
+                    container.appendChild(folderDiv);
+                }
+            }
+
+            async deleteOrdersPermanently(targets) {
+                // Usar las claves reales de Firebase, que pueden ser distintas de order.id.
+                const rawItems = await this.fbGet('orderItems') || {};
+                const rawPayments = await this.fbGet('payments') || {};
+                const paths = new Set();
+                for (const target of targets) {
+                    const order = target.order || target;
+                    const dbKey = target.dbKey || order.id;
+                    const ids = new Set([dbKey, order.id].filter(Boolean).map(String));
+                    for (const [key, item] of Object.entries(rawItems)) {
+                        if (item && ids.has(String(item.orderId))) paths.add(`orderItems/${key}`);
+                    }
+                    for (const [key, payment] of Object.entries(rawPayments)) {
+                        if (payment && ids.has(String(payment.orderId))) paths.add(`payments/${key}`);
+                    }
+                    if (dbKey) paths.add(`orders/${dbKey}`);
+                }
+                for (const path of paths) await this.fbDelete(path);
+                const [rawOrdersNow, rawItemsNow, rawPaymentsNow] = await Promise.all([
+                    this.fbGet('orders'), this.fbGet('orderItems'), this.fbGet('payments')
+                ]);
+                this.cachedOrders = Object.entries(rawOrdersNow || {}).map(([key, order]) => ({ ...order, id: order?.id || key }));
+                this.cachedOrderItems = Object.entries(rawItemsNow || {}).map(([key, item]) => ({ ...item, id: item?.id || key }));
+                this.cachedPayments = Object.entries(rawPaymentsNow || {}).map(([key, payment]) => ({ ...payment, id: payment?.id || key }));
+            }
+
+            async deleteHistoryFolder(folderKey) {
+                const rawOrders = await this.fbGet('orders') || {};
+                const targets = Object.entries(rawOrders).filter(([key, order]) => {
+                    if (!order) return false;
+                    if (folderKey === 'Pruebas') return !!order.isTest;
+                    const rawDate = order.createdAt;
+                    const dateObj = rawDate === undefined || rawDate === null || rawDate === '' ? new Date(NaN) : new Date(rawDate);
+                    if (folderKey === 'Sin fecha') return isNaN(dateObj.getTime());
+                    if (isNaN(dateObj.getTime())) return false;
+                    const dateKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')}`;
+                    return !order.isTest && dateKey === folderKey;
+                }).map(([dbKey, order]) => ({ dbKey, order: { ...order, id: order.id || dbKey } }));
+                if (!targets.length) return this.showToast('La carpeta ya está vacía.');
+                this.showConfirm(`¿Eliminar definitivamente ${targets.length} pedido(s) de ${folderKey}? También se borrarán sus productos y pagos. Esta acción no se puede deshacer.`, async () => {
+                    await this.deleteOrdersPermanently(targets);
+                    this.showToast('Carpeta eliminada permanentemente.');
+                    this.loadHistory(this.historyFilter);
+                    if (this.currentView === 'view-mesas') this.renderMainScreen();
+                });
+            }
+
+            async clearOfftableOrders() {
+                const rawOrders = await this.fbGet('orders') || {};
+                const targets = Object.entries(rawOrders).filter(([key, order]) =>
+                    order && !order.isTest &&
+                    order.destination !== 'dine_in' &&
+                    order.status !== 'closed' &&
+                    order.status !== 'cancelled'
+                ).map(([dbKey, order]) => ({ dbKey, order: { ...order, id: order.id || dbKey } }));
+                if (!targets.length) return this.showToast('No hay pedidos sin mesa para limpiar.');
+                this.showConfirm(`¿Eliminar definitivamente ${targets.length} pedido(s) sin mesa asignada?`, async () => {
+                    await this.deleteOrdersPermanently(targets);
+                    this.showToast('Pedidos sin mesa eliminados permanentemente.');
+                    this.renderMainScreen();
+                    if (this.currentView === 'view-historial') this.loadHistory(this.historyFilter);
+                });
+            }
+
+            // Descarga instantánea de PDF para cualquier día del Historial
+            downloadDailyPDF(dateStr) {
+                document.getElementById('cierre-date').value = dateStr;
+                this.generateDailySummary();
+                setTimeout(() => this.generatePDF(), 200);
+            }
+
+            showHistoryDetail(order) {
+                const items = this.cachedOrderItems.filter(i => i.orderId === order.id);
+                const payments = this.cachedPayments.filter(p => p.orderId === order.id);
+
+                let isCancelled = order.status === 'cancelled';
+
+                let html = `<div class="space-y-3 text-xs md:text-sm">`;
+                
+                if (isCancelled) {
+                    html += `<div class="bg-red-50 text-red-700 p-2.5 text-center rounded-xl font-bold border border-red-200">Este pedido fue anulado.</div>`;
+                }
+
+                html += `
+                    <div class="bg-gray-50 p-4 rounded-2xl border text-center">
+                        <p class="text-gray-800 font-black text-sm md:text-base mb-1">Pedido #${order.orderNumber || '--'}</p>
+                        <p class="text-gray-500 font-semibold text-xs">Apertura: ${formatDate(order.createdAt)}</p>
+                        ${order.closedAt ? `<p class="text-gray-500 font-semibold text-xs">Cierre: ${formatDate(order.closedAt)}</p>` : ''}
+                        <div class="flex justify-around mt-3 font-black text-sm md:text-base">
+                            <div class="text-gray-800">Total:<br>${formatMoney(order.total)}</div>
+                            <div class="text-green-600">Pagado:<br>${formatMoney(order.paid)}</div>
+                            <div class="text-red-600">Saldo:<br>${formatMoney(order.total - order.paid)}</div>
+                        </div>
+                    </div>
+                `;
+
+                if (order.generalNote) {
+                    html += `<div class="bg-blue-50 border border-blue-200 p-2.5 rounded-xl font-bold text-blue-900"><b>Comentario:</b> ${order.generalNote}</div>`;
+                }
+
+                html += `<h4 class="font-black border-b pb-1">Productos Registrados</h4><div class="space-y-2">`;
+                items.forEach(i => {
+                    html += `
+                        <div class="flex justify-between text-gray-700">
+                            <div><span class="font-black">${i.quantity}x</span> ${i.nameSnapshot} ${i.isTakeout?'<span class="text-[9px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded ml-1">LL</span>':''}
+                            ${i.note ? `<div class="text-xs text-orange-600 ml-4 font-bold">${i.note}</div>` : ''}
+                            </div>
+                            <span class="font-bold">${formatMoney(i.priceSnapshot * i.quantity)}</span>
+                        </div>`;
+                });
+                if (items.length === 0) html += `<p class="text-gray-400">Sin productos</p>`;
+                html += `</div>`;
+
+                if(payments.length > 0) {
+                    html += `<h4 class="font-black border-b pb-1 mt-4">Historial de Pagos Registrados</h4><div class="space-y-1.5">`;
+                    payments.forEach(p => {
+                        html += `<div class="flex justify-between text-green-700 font-bold bg-green-50 p-2 rounded-xl"><span>${p.method} - ${formatTime(p.timestamp)}</span><span>${formatMoney(p.amount)}</span></div>`;
+                    });
+                    html += `</div>`;
+                }
+                html += `</div>`;
+
+                let buttons = [{ label: 'Cerrar', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.closeModal() }];
+                
+                if (!isCancelled) {
+                    if(order.status !== 'closed') {
+                        buttons.unshift({ label: 'Abrir / Editar', class: 'bg-blue-600 hover:bg-blue-700 text-white font-bold', onClick: () => {
+                            this.closeModal();
+                            this.openOrder(order);
+                        }});
+                    }
+                    
+                    buttons.push({ label: '<i class="fa-solid fa-trash-can"></i> Anular', class: 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100', onClick: () => this.confirmCancelOrder(order, payments.length > 0) });
+                }
+
+                this.showModal(`Detalle del Pedido`, html, buttons);
+            }
+
+            confirmCancelOrder(order, hasPayments) {
+                let warningText = hasPayments 
+                    ? `<div class="text-red-600 font-black mb-2 text-sm md:text-base"><i class="fa-solid fa-triangle-exclamation text-3xl mb-2 block"></i>¡ADVERTENCIA GRAVE!</div>
+                       <p class="mb-2">Este pedido tiene pagos registrados por <b>${formatMoney(order.paid)}</b>.</p>
+                       <p>Anularlo significa que el dinero <b>desaparecerá de tu cuadre de caja (cierre del día)</b>, pero el registro original se mantendrá tachado por seguridad.</p>` 
+                    : `<div class="text-red-600 font-black mb-2 text-sm md:text-base"><i class="fa-solid fa-circle-exclamation text-3xl mb-2 block"></i>Confirmación</div>
+                       <p>¿Estás seguro de anular el pedido #${order.orderNumber || '--'}?</p>`;
+
+                const html = `<div class="text-center text-xs md:text-sm font-bold text-gray-700 p-2">${warningText}</div>`;
+
+                this.showModal('Anular Pedido', html, [
+                    { label: 'No, Volver', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.showHistoryDetail(order) },
+                    { label: 'Sí, Anular Definitivamente', class: 'bg-red-600 hover:bg-red-700 text-white font-black', onClick: async () => {
+                        await this.fbSave(`orders/${order.id}/status`, 'cancelled');
+                        this.closeModal();
+                        this.showToast("Pedido anulado con éxito.");
+                        this.loadHistory(this.historyFilter);
+                    }}
+                ]);
+            }
+
+            generateDailySummary() {
+                const dateStr = document.getElementById('cierre-date').value;
+                if(!dateStr) return;
+
+                const startOfDay = getStartOfDay(dateStr);
+                const endOfDay = getEndOfDay(dateStr);
+
+                const validOrders = this.cachedOrders.filter(o => !o.isTest && o.status !== 'cancelled');
+                
+                const ordersToday = validOrders.filter(o => o.createdAt >= startOfDay && o.createdAt <= endOfDay);
+                
+                let totalFacturado = 0, pendingBalance = 0;
+                ordersToday.forEach(o => {
+                    totalFacturado += o.total;
+                    pendingBalance += (o.total - o.paid);
+                });
+
+                const validOrderIds = new Set(validOrders.map(o => o.id));
+                const paymentsToday = this.cachedPayments.filter(p => p.timestamp >= startOfDay && p.timestamp <= endOfDay && validOrderIds.has(p.orderId));
+                
+                let totalCobrado = 0;
+                let byMethod = { 'Efectivo': 0, 'QR': 0, 'Tarjeta': 0, 'Otro': 0 };
+                paymentsToday.forEach(p => {
+                    totalCobrado += p.amount;
+                    if(byMethod[p.method] !== undefined) byMethod[p.method] += p.amount;
+                    else byMethod['Otro'] += p.amount;
+                });
+
+                let itemsCounts = {};
+                ordersToday.forEach(order => {
+                    this.cachedOrderItems.filter(i => i.orderId === order.id).forEach(item => {
+                        if(!itemsCounts[item.nameSnapshot]) itemsCounts[item.nameSnapshot] = { qty: 0, total: 0 };
+                        itemsCounts[item.nameSnapshot].qty += item.quantity;
+                        itemsCounts[item.nameSnapshot].total += (item.quantity * item.priceSnapshot);
+                    });
+                });
+
+                const cancelledCount = this.cachedOrders.filter(o => !o.isTest && o.status === 'cancelled' && o.createdAt >= startOfDay && o.createdAt <= endOfDay).length;
+
+                this.currentSummaryData = { date: dateStr, ordersCount: ordersToday.length, cancelledCount, totalFacturado, totalCobrado, pendingBalance, byMethod, itemsCounts, ordersToday };
+
+                if(ordersToday.length === 0 && paymentsToday.length === 0) {
+                    document.getElementById('cierre-dashboard').classList.add('hidden');
+                    document.getElementById('cierre-empty').classList.remove('hidden');
+                } else {
+                    document.getElementById('cierre-empty').classList.add('hidden');
+                    document.getElementById('cierre-dashboard').classList.remove('hidden');
+
+                    document.getElementById('cd-cobrado').innerText = formatMoney(totalCobrado);
+                    document.getElementById('cd-facturado').innerText = formatMoney(totalFacturado);
+                    document.getElementById('cd-cuentas').innerText = ordersToday.length;
+                    document.getElementById('cd-pendiente').innerText = formatMoney(pendingBalance);
+
+                    document.getElementById('cd-efectivo').innerText = formatMoney(byMethod['Efectivo']);
+                    document.getElementById('cd-qr').innerText = formatMoney(byMethod['QR']);
+                    document.getElementById('cd-tarjeta').innerText = formatMoney(byMethod['Tarjeta']);
+                    document.getElementById('cd-otros').innerText = formatMoney(byMethod['Otro']);
+                }
+            }
+
+            generatePDF() {
+                if(!this.currentSummaryData) return;
+                const data = this.currentSummaryData;
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+
+                doc.setFontSize(18);
+                doc.text(this.settings.restaurantName, 14, 20);
+                doc.setFontSize(12);
+                doc.text(`Reporte de Cierre Diario`, 14, 28);
+                doc.setFontSize(10);
+                doc.text(`Fecha: ${data.date}`, 14, 34);
+
+                doc.setFillColor(240, 240, 240);
+                doc.rect(14, 40, 182, 36, 'F');
+                doc.setFont("helvetica", "bold");
+                doc.text(`Total Cobrado: ${formatMoney(data.totalCobrado)}`, 20, 48);
+                doc.text(`Total Facturado: ${formatMoney(data.totalFacturado)}`, 20, 56);
+                doc.text(`Saldo Pendiente: ${formatMoney(data.pendingBalance)}`, 20, 64);
+                
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9);
+                doc.text(`Cuentas Válidas: ${data.ordersCount}  |  Anuladas: ${data.cancelledCount}`, 20, 72);
+                doc.setFontSize(10);
+
+                doc.autoTable({
+                    startY: 85,
+                    head: [['Método de Pago', 'Monto Recibido']],
+                    body: [
+                        ['Efectivo', formatMoney(data.byMethod['Efectivo'])],
+                        ['QR', formatMoney(data.byMethod['QR'])],
+                        ['Tarjeta', formatMoney(data.byMethod['Tarjeta'])],
+                        ['Otros', formatMoney(data.byMethod['Otro'])]
+                    ],
+                    theme: 'grid',
+                    headStyles: { fillColor: [30, 64, 175] }
+                });
+
+                let productRows = Object.keys(data.itemsCounts).map(name => [name, data.itemsCounts[name].qty, formatMoney(data.itemsCounts[name].total)]);
+                doc.autoTable({
+                    startY: doc.lastAutoTable.finalY + 10,
+                    head: [['Producto Vendido', 'Cantidad', 'Importe']],
+                    body: productRows,
+                    theme: 'striped',
+                    headStyles: { fillColor: [75, 85, 99] }
+                });
+
+                doc.save(`Cierre_${data.date}.pdf`);
+            }
+
+            renderMenuAdmin() {
+                const container = document.getElementById('menu-admin-list');
+                container.innerHTML = '';
+
+                const categories = [...this.cachedCategories];
+                const products = [...this.cachedProducts];
+
+                categories.sort((a,b) => (a.order || 0) - (b.order || 0));
+
+                categories.forEach(cat => {
+                    const catProducts = products.filter(p => p.categoryId === cat.id);
+                    catProducts.sort((a,b) => (a.order || 0) - (b.order || 0));
+
+                    const div = document.createElement('div');
+                    div.className = "category-item bg-white rounded-2xl shadow-sm border overflow-hidden mb-3";
+                    div.dataset.id = cat.id;
+
+                    let html = `
+                        <div class="bg-gray-100 px-4 py-3 flex justify-between items-center border-b">
+                            <div class="flex items-center gap-2.5">
+                                <i class="fa-solid fa-grip-vertical text-gray-400 cursor-grab active:cursor-grabbing cat-drag-handle p-1 text-lg"></i>
+                                <h3 class="font-extrabold text-sm md:text-base text-gray-800 uppercase tracking-wide">${cat.name}</h3>
+                            </div>
+                            <button onclick="app.openCategoryModal('${cat.id}')" class="text-gray-500 hover:text-gray-700 text-xs p-1.5 bg-gray-200 rounded-lg active:scale-95"><i class="fa-solid fa-pen"></i></button>
+                        </div>
+                        <div class="divide-y min-h-[35px]" id="prod-list-${cat.id}" data-category-id="${cat.id}">
+                    `;
+
+                    catProducts.forEach(prod => {
+                        const activeClass = prod.active ? 'text-gray-800' : 'text-gray-400 line-through';
+                        html += `
+                            <div class="product-item p-3 flex justify-between items-center hover:bg-gray-50" data-id="${prod.id}">
+                                <div class="flex items-center gap-2.5 flex-1">
+                                    <i class="fa-solid fa-grip-vertical text-gray-300 cursor-grab active:cursor-grabbing prod-drag-handle p-1 text-lg"></i>
+                                    <div class="cursor-pointer flex-1" onclick="app.openProductModal('${prod.id}')">
+                                        <div class="font-bold text-xs md:text-sm ${activeClass}">${prod.name}</div>
+                                        <div class="text-xs font-semibold text-gray-500">${formatMoney(prod.price)}</div>
+                                    </div>
+                                </div>
+                                <button onclick="app.toggleProductActive('${prod.id}', ${!prod.active})" class="ml-2 w-11 h-6 rounded-full ${prod.active ? 'bg-blue-600' : 'bg-gray-300'} relative transition-colors shrink-0">
+                                    <div class="w-4 h-4 bg-white rounded-full absolute top-1 ${prod.active ? 'right-1' : 'left-1'} shadow"></div>
+                                </button>
+                            </div>
+                        `;
+                    });
+
+                    if (catProducts.length === 0) {
+                        html += `<div class="p-3 text-center text-xs text-gray-400">Arrastra productos aquí</div>`;
+                    }
+
+                    html += `</div>`;
+                    div.innerHTML = html;
+                    container.appendChild(div);
+                });
+
+                Sortable.create(container, {
+                    handle: '.cat-drag-handle',
+                    animation: 150,
+                    delay: 100,
+                    delayOnTouchOnly: true,
+                    onEnd: async (evt) => {
+                        const itemEls = container.querySelectorAll('.category-item');
+                        for (let index = 0; index < itemEls.length; index++) {
+                            const id = itemEls[index].dataset.id;
+                            const cat = this.cachedCategories.find(c => c.id === id);
+                            if (cat && cat.order !== index) {
+                                await this.fbSave(`categories/${id}/order`, index);
+                            }
+                        }
+                    }
+                });
+
+                categories.forEach(cat => {
+                    const prodContainer = document.getElementById(`prod-list-${cat.id}`);
+                    if(prodContainer) {
+                        Sortable.create(prodContainer, {
+                            handle: '.prod-drag-handle',
+                            animation: 150,
+                            group: 'products',
+                            delay: 100,
+                            delayOnTouchOnly: true,
+                            onEnd: async (evt) => {
+                                const toList = evt.to;
+                                const newCatId = toList.dataset.categoryId;
+                                const prodEls = toList.querySelectorAll('.product-item');
+                                for (let index = 0; index < prodEls.length; index++) {
+                                    const id = prodEls[index].dataset.id;
+                                    const p = this.cachedProducts.find(pr => pr.id === id);
+                                    if(p) {
+                                        if (p.order !== index) await this.fbSave(`products/${id}/order`, index);
+                                        if (p.categoryId !== newCatId) await this.fbSave(`products/${id}/categoryId`, newCatId);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+
+            async toggleProductActive(id, newState) {
+                await this.fbSave(`products/${id}/active`, newState);
+            }
+
+            openCategoryModal(id = null) {
+                let cat = { name: '', order: 99 };
+                if (id) cat = this.cachedCategories.find(c => c.id === id) || cat;
+
+                const html = `
+                    <div class="space-y-3 text-xs md:text-sm">
+                        <div>
+                            <label class="block font-bold text-gray-600 mb-1">Nombre de la Categoría</label>
+                            <input type="text" id="cat-name" value="${cat.name}" class="w-full border-2 rounded-xl p-3 bg-gray-50 font-bold focus:border-blue-500 outline-none">
+                        </div>
+                    </div>
+                `;
+
+                this.showModal(id ? 'Editar Categoría' : 'Nueva Categoría', html, [
+                    { label: 'Cancelar', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.closeModal() },
+                    { label: 'Guardar', class: 'bg-blue-600 hover:bg-blue-700 text-white font-bold', onClick: async () => {
+                        const name = document.getElementById('cat-name').value;
+                        if (!name) return;
+                        const catId = id || generateId();
+                        await this.fbSave(`categories/${catId}`, { id: catId, name, order: cat.order });
+                        this.closeModal();
+                    }}
+                ]);
+            }
+
+            openProductModal(id = null) {
+                const categories = [...this.cachedCategories];
+                categories.sort((a,b) => (a.order || 0) - (b.order || 0));
+
+                let p = { name: '', price: 0, categoryId: categories.length > 0 ? categories[0].id : '', active: true, order: 999 };
+                if (id) p = this.cachedProducts.find(pr => pr.id === id) || p;
+
+                let catOptions = '';
+                categories.forEach(c => {
+                    catOptions += `<option value="${c.id}" ${c.id === p.categoryId ? 'selected' : ''}>${c.name}</option>`;
+                });
+                catOptions += `<option value="NEW_CAT" class="font-black text-blue-600">➕ Crear nueva categoría...</option>`;
+
+                const html = `
+                    <div class="space-y-3 text-xs md:text-sm">
+                        <div>
+                            <label class="block font-bold text-gray-600 mb-1">Nombre del Producto</label>
+                            <input type="text" id="prod-name" value="${p.name}" class="w-full border-2 rounded-xl p-3 bg-gray-50 font-bold focus:border-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-gray-600 mb-1">Precio Unitario (Bs)</label>
+                            <input type="number" id="prod-price" value="${p.price}" step="0.5" min="0" class="w-full border-2 rounded-xl p-3 bg-gray-50 font-black text-base focus:border-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-gray-600 mb-1">Categoría</label>
+                            <select id="prod-cat" class="w-full border-2 rounded-xl p-3 bg-gray-50 font-bold focus:border-blue-500 outline-none" onchange="if(this.value==='NEW_CAT') document.getElementById('new-cat-div').classList.remove('hidden'); else document.getElementById('new-cat-div').classList.add('hidden');">
+                                ${catOptions}
+                            </select>
+                        </div>
+                        <div id="new-cat-div" class="hidden bg-blue-50 p-2.5 rounded-xl border border-blue-200">
+                            <label class="block font-bold text-blue-800 mb-1">Nombre de la Nueva Categoría</label>
+                            <input type="text" id="new-cat-name" class="w-full border rounded-lg p-2 bg-white font-bold">
+                        </div>
+                    </div>
+                `;
+
+                this.showModal(id ? 'Editar Producto' : 'Nuevo Producto', html, [
+                    { label: 'Cancelar', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.closeModal() },
+                    { label: 'Guardar', class: 'bg-blue-600 hover:bg-blue-700 text-white font-bold', onClick: async () => {
+                        const name = document.getElementById('prod-name').value;
+                        const price = parseFloat(document.getElementById('prod-price').value);
+                        let catId = document.getElementById('prod-cat').value;
+
+                        if (!name || isNaN(price)) { alert("Datos inválidos."); return; }
+
+                        if (catId === 'NEW_CAT') {
+                            const newCatName = document.getElementById('new-cat-name').value;
+                            if(!newCatName) { alert("Nombre de categoría vacío."); return; }
+                            catId = generateId();
+                            await this.fbSave(`categories/${catId}`, { id: catId, name: newCatName, order: categories.length });
+                        }
+
+                        const prodId = id || generateId();
+                        await this.fbSave(`products/${prodId}`, {
+                            id: prodId,
+                            name,
+                            price,
+                            categoryId: catId,
+                            active: id ? p.active : true,
+                            order: p.order
+                        });
+                        this.closeModal();
+                    }}
+                ]);
+            }
+
+            // MEJORA #10: ABRIR O DEFINIR EL SIGUIENTE NÚMERO DE PEDIDO EN AJUSTES
+            async saveSettings() {
+                const name = document.getElementById('cfg-nombre').value;
+                const count = parseInt(document.getElementById('cfg-mesas').value);
+                const nextOrderNum = parseInt(document.getElementById('cfg-order-number').value);
+
+                if(!name || count < 1 || isNaN(nextOrderNum) || nextOrderNum < 1) return;
+
+                this.settings.restaurantName = name;
+                this.settings.tableCount = count;
+                this.settings.lastOrderNumber = Math.max(0, nextOrderNum - 1);
+
+                await this.fbSave('settings/appConfig', this.settings);
+                document.getElementById('nav-brand-title').innerText = name;
+                document.title = name;
+                this.showToast("Ajustes guardados correctamente.");
+            }
+
+            exportData() {
+                const data = {
+                    settings: [this.settings],
+                    categories: this.cachedCategories,
+                    products: this.cachedProducts,
+                    orders: this.cachedOrders,
+                    orderItems: this.cachedOrderItems,
+                    payments: this.cachedPayments,
+                    exportDate: new Date().toISOString()
+                };
+                const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Respaldo_POS_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+
+            handleFileSelect(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        this.showConfirm(`¿Restaurar copia de seguridad? Se reemplazarán los datos actuales.`, async () => {
+                            await this.fbDelete('settings');
+                            await this.fbDelete('categories');
+                            await this.fbDelete('products');
+                            await this.fbDelete('orders');
+                            await this.fbDelete('orderItems');
+                            await this.fbDelete('payments');
+
+                            if (data.settings && data.settings[0]) await this.fbSave('settings/appConfig', data.settings[0]);
+                            
+                            const catObj = {}; if(data.categories) data.categories.forEach(c => catObj[c.id] = c); await this.fbSave('categories', catObj);
+                            const prodObj = {}; if(data.products) data.products.forEach(p => prodObj[p.id] = p); await this.fbSave('products', prodObj);
+                            const ordObj = {}; if(data.orders) data.orders.forEach(o => ordObj[o.id] = o); await this.fbSave('orders', ordObj);
+                            const itemObj = {}; if(data.orderItems) data.orderItems.forEach(i => itemObj[i.id] = i); await this.fbSave('orderItems', itemObj);
+                            const payObj = {}; if(data.payments) data.payments.forEach(p => payObj[p.id] = p); await this.fbSave('payments', payObj);
+
+                            this.showAlert("Restauración completada. La página se recargará.");
+                            setTimeout(() => window.location.reload(), 1500);
+                        });
+                    } catch (err) { this.showAlert("El archivo seleccionado no tiene un formato válido."); }
+                };
+                reader.readAsText(file);
+            }
+
+            factoryReset() {
+                 this.showConfirm("¿Estás seguro de BORRAR TODA LA BASE DE DATOS? Esta acción no se puede deshacer.", async () => {
+                     await this.fbDelete('/');
+                     this.showAlert("Base de datos borrada. La página se recargará.");
+                     setTimeout(() => window.location.reload(), 1500);
+                 });
+            }
+
+            // --- UI MODAL COMPONENTS ---
+            showModal(title, htmlContent, buttons = []) {
+                document.getElementById('modal-title').innerHTML = title;
+                document.getElementById('modal-body').innerHTML = htmlContent;
+                const footer = document.getElementById('modal-footer');
+                footer.innerHTML = '';
+
+                if (buttons.length === 0) {
+                    buttons = [{ label: 'Aceptar', class: 'bg-blue-600 hover:bg-blue-700 text-white font-bold', onClick: () => this.closeModal() }];
+                }
+
+                buttons.forEach(btn => {
+                    const b = document.createElement('button');
+                    b.className = `px-4 py-2.5 rounded-xl text-xs md:text-sm font-black transition-transform active:scale-95 ${btn.class}`;
+                    b.innerHTML = btn.label;
+                    b.onclick = btn.onClick;
+                    footer.appendChild(b);
+                });
+
+                document.getElementById('modal-overlay').classList.remove('hidden');
+            }
+
+            closeModal() {
+                document.getElementById('modal-overlay').classList.add('hidden');
+            }
+
+            showAlert(msg) {
+                this.showModal('Aviso', `<p class="text-xs md:text-sm font-bold text-gray-700 text-center py-3">${msg}</p>`);
+            }
+
+            showConfirm(msg, onConfirm) {
+                this.showModal('Confirmación', `<p class="text-xs md:text-sm font-bold text-gray-700 text-center py-4">${msg}</p>`, [
+                    { label: 'Cancelar', class: 'bg-gray-200 text-gray-800 hover:bg-gray-300', onClick: () => this.closeModal() },
+                    { label: 'Confirmar', class: 'bg-blue-600 hover:bg-blue-700 text-white font-black px-6', onClick: () => { this.closeModal(); onConfirm(); } }
+                ]);
+            }
+
+            showToast(msg) {
+                const toast = document.getElementById('toast');
+                document.getElementById('toast-msg').innerText = msg;
+                toast.classList.remove('hidden');
+                
+                if (this.toastTimeout) clearTimeout(this.toastTimeout);
+                
+                this.toastTimeout = setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 2200);
+            }
+        }
+
+        const app = new App();
+        window.app = app;
+        window.onload = () => app.init();
+    </script>
+</body>
+</html>
